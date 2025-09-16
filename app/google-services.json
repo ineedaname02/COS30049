@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "340150841721",
+    "project_id": "lasthope-49b8c",
+    "storage_bucket": "lasthope-49b8c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:340150841721:android:a2662cc4f78b269c89bfa8",
+        "android_client_info": {
+          "package_name": "com.example.myPlant"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBgkHRNwSxohZSOoimMZ0gyfwcQGqi3CMI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
