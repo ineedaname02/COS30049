@@ -38,7 +38,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:paddingTop="16dp"
-            android:text="Upload plant images to identify"
+            android:text="Upload plant photo to identify"
             android:textSize="16sp" />
 
     </LinearLayout>
