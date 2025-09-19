@@ -6,6 +6,7 @@ import android.provider.OpenableColumns
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
@@ -91,6 +92,16 @@ class HomeFragment : Fragment() {
             } else {
                 binding.textHome.text = "Please upload at least one image first."
             }
+        }
+
+        // Correct button
+        binding.buttonCorrect.setOnClickListener {
+            Toast.makeText(requireContext(), "Thanks for confirming!", Toast.LENGTH_SHORT).show()
+        }
+
+        // Wrong button
+        binding.buttonWrong.setOnClickListener {
+            Toast.makeText(requireContext(), "Image sent to experts for review.", Toast.LENGTH_LONG).show()
         }
 
         return root
