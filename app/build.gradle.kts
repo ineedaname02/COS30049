@@ -4,7 +4,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
 
-    id("com.google.gms.google-services") // ✅ Apply Firebase plugin here
+    id("com.google.gms.google-services") version "4.4.3" apply false // ✅ Apply Firebase plugin here
 
 }
 
@@ -20,11 +20,11 @@ val localProperties = Properties().apply {
 }
 
 android {
-    namespace = "com.example.myPlant"
+    namespace = "Smart.Plant.Identfier"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.example.myPlant"
+        applicationId = "Smart.Plant.Identifier"
         minSdk = 29
         targetSdk = 36
         versionCode = 1
@@ -81,7 +81,7 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
 
     // Import the Firebase BoM
-    implementation(platform("com.google.firebase:firebase-bom:32.7.0"))
+    implementation(platform("com.google.firebase:firebase-bom:34.3.0"))
 
     // TODO: Add the dependencies for Firebase products you want to use
     // When using the BoM, don't specify versions in Firebase dependencies

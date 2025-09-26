@@ -1,21 +1,21 @@
 {
   "project_info": {
-    "project_number": "340150841721",
-    "project_id": "lasthope-49b8c",
-    "storage_bucket": "lasthope-49b8c.firebasestorage.app"
+    "project_number": "716243749121",
+    "project_id": "cos30049-group-wee",
+    "storage_bucket": "cos30049-group-wee.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:340150841721:android:a2662cc4f78b269c89bfa8",
+        "mobilesdk_app_id": "1:716243749121:android:a9463fc5492ffc24e2b300",
         "android_client_info": {
-          "package_name": "com.example.myPlant"
+          "package_name": "smart.plant.identifier"
         }
       },
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyBgkHRNwSxohZSOoimMZ0gyfwcQGqi3CMI"
+          "current_key": "AIzaSyDnc2zpiMTE9RxWVGUiHjwu_Yi83Ns06d4"
         }
       ],
       "services": {
