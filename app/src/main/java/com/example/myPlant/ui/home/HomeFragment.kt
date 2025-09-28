@@ -12,7 +12,7 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import com.example.myPlant.PlantViewModelFactory
 import com.example.myPlant.databinding.FragmentHomeBinding
-import com.example.myPlant.data.repository.PlantRepository
+
 import com.example.myPlant.data.model.PlantViewModel
 import com.example.myPlant.data.model.PlantNetResponse
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -24,6 +24,8 @@ import com.example.myPlant.BuildConfig
 
 import androidx.recyclerview.widget.LinearLayoutManager
 
+import com.example.myPlant.data.repository.PlantRepository
+import com.example.myPlant.data.repository.FirebaseRepository
 
 class HomeFragment : Fragment() {
 
@@ -33,6 +35,8 @@ class HomeFragment : Fragment() {
     private lateinit var viewModel: PlantViewModel
     private lateinit var adapter: SelectedImagesAdapter
     private val selectedImageUris = mutableListOf<Uri>()
+
+    private lateinit var firebaseRepository: FirebaseRepository
 
     private val pickImageLauncher = registerForActivityResult(
         ActivityResultContracts.GetMultipleContents()
@@ -63,13 +67,19 @@ class HomeFragment : Fragment() {
         val factory = PlantViewModelFactory(repository)
         viewModel = ViewModelProvider(this, factory)[PlantViewModel::class.java]
 
+        //this above viewModel.result.observe(viewLifecycleOwner)
+        firebaseRepository = FirebaseRepository(requireContext())
+
         viewModel.result.observe(viewLifecycleOwner) { response ->
             showResults(response)
+            firebaseRepository.uploadPlantResult(response, selectedImageUris)
         }
 
         viewModel.error.observe(viewLifecycleOwner) {
             binding.textHome.text = "Error: $it"
         }
+
+
 
         // Upload button
         binding.buttonUpload.setOnClickListener {

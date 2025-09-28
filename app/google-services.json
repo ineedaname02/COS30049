@@ -9,7 +9,7 @@
       "client_info": {
         "mobilesdk_app_id": "1:716243749121:android:a9463fc5492ffc24e2b300",
         "android_client_info": {
-          "package_name": "smart.plant.identifier"
+          "package_name": "com.example.myPlant"
         }
       },
       "oauth_client": [],
