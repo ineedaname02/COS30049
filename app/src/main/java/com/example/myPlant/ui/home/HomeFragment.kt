@@ -111,7 +111,25 @@ class HomeFragment : Fragment() {
 
         // Wrong button
         binding.buttonWrong.setOnClickListener {
-            Toast.makeText(requireContext(), "Image sent to experts for review.", Toast.LENGTH_LONG).show()
+            val db = FirebaseFirestore.getInstance()
+
+            // Replace with the plantId you’re working with
+            val plantId = "7a9481e2-4dfa-449f-944a-7ec87f713776"
+
+            val updates = mapOf(
+                "isFlagged" to true,
+                "flagReason" to "User reported incorrect identification",
+                "flaggedAt" to System.currentTimeMillis()
+            )
+
+            db.collection("plants").document(plantId)
+                .update(updates)
+                .addOnSuccessListener {
+                    Toast.makeText(requireContext(), "Image sent to experts for review.", Toast.LENGTH_LONG).show()
+                }
+                .addOnFailureListener { e ->
+                    Toast.makeText(requireContext(), "Failed to flag: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
         }
 
         return root

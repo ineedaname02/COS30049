@@ -45,20 +45,13 @@
             android:id="@+id/buttonCorrect"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Correct"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toStartOf="@id/buttonWrong"
-            app:layout_constraintHorizontal_chainStyle="packed"
-            app:layout_constraintTop_toTopOf="parent" />
+            android:text="Correct"/>
 
         <Button
             android:id="@+id/buttonWrong"
-            android:layout_width="wrap_content"
+            android:layout_width="102dp"
             android:layout_height="wrap_content"
-            android:text="Wrong"
-            app:layout_constraintStart_toEndOf="@id/buttonCorrect"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintBottom_toBottomOf="parent"/>
+            android:text="Wrong" />
 
     </LinearLayout>
 
