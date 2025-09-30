@@ -109,27 +109,11 @@ class HomeFragment : Fragment() {
             Toast.makeText(requireContext(), "Thanks for confirming!", Toast.LENGTH_SHORT).show()
         }
 
-        // Wrong button
+        val firebaseRepo = FirebaseRepository(requireContext())
+
         binding.buttonWrong.setOnClickListener {
-            val db = FirebaseFirestore.getInstance()
-
-            // Replace with the plantId you’re working with
-            val plantId = "7a9481e2-4dfa-449f-944a-7ec87f713776"
-
-            val updates = mapOf(
-                "isFlagged" to true,
-                "flagReason" to "User reported incorrect identification",
-                "flaggedAt" to System.currentTimeMillis()
-            )
-
-            db.collection("plants").document(plantId)
-                .update(updates)
-                .addOnSuccessListener {
-                    Toast.makeText(requireContext(), "Image sent to experts for review.", Toast.LENGTH_LONG).show()
-                }
-                .addOnFailureListener { e ->
-                    Toast.makeText(requireContext(), "Failed to flag: ${e.message}", Toast.LENGTH_SHORT).show()
-                }
+            val plantId = "7a9481e2-4dfa-449f-944a-7ec87f713776" // This should come from the plant you uploaded
+            firebaseRepo.flagPlant(plantId, "User reported incorrect identification")
         }
 
         return root
