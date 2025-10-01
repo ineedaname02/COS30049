@@ -103,17 +103,14 @@ class HomeFragment : Fragment() {
                 binding.textHome.text = "Please upload at least one image first."
             }
         }
-
-        // Correct button
-        binding.buttonCorrect.setOnClickListener {
-            Toast.makeText(requireContext(), "Thanks for confirming!", Toast.LENGTH_SHORT).show()
-        }
-
         val firebaseRepo = FirebaseRepository(requireContext())
 
+        binding.buttonCorrect.setOnClickListener {
+            firebaseRepo.uploadPlantResult(response, imageUris, isFlagged = false)
+        }
+
         binding.buttonWrong.setOnClickListener {
-            val plantId = "7a9481e2-4dfa-449f-944a-7ec87f713776" // This should come from the plant you uploaded
-            firebaseRepo.flagPlant(plantId, "User reported incorrect identification")
+            firebaseRepo.uploadPlantResult(response, imageUris, isFlagged = true)
         }
 
         return root

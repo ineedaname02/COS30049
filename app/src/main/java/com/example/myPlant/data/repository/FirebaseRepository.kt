@@ -13,7 +13,7 @@ class FirebaseRepository(private val context: Context) {
     private val storage = FirebaseStorage.getInstance()
     private val db = FirebaseFirestore.getInstance()
 
-    fun uploadPlantResult(response: PlantNetResponse?, imageUris: List<Uri>) {
+    fun uploadPlantResult(response: PlantNetResponse?, imageUris: List<Uri>, isFlagged: Boolean, flagReason: String? = null) {
         if (response == null || imageUris.isEmpty()) {
             Toast.makeText(context, "No data to upload", Toast.LENGTH_SHORT).show()
             return
@@ -34,7 +34,7 @@ class FirebaseRepository(private val context: Context) {
 
                         // Once all images are uploaded
                         if (uploadedCount == imageUris.size) {
-                            saveResultToFirestore(response, imageUrls, plantId)
+                            saveResultToFirestore(response, imageUrls, plantId, isFlagged, flagReason)
                         }
                     }
                 }
@@ -44,7 +44,7 @@ class FirebaseRepository(private val context: Context) {
         }
     }
 
-    private fun saveResultToFirestore(response: PlantNetResponse, imageUrls: List<String>, plantId: String) {
+    private fun saveResultToFirestore(response: PlantNetResponse, imageUrls: List<String>, plantId: String, isFlagged: Boolean, flagReason: String? = null) {
         val results = response.results?.map { result ->
             mapOf(
                 "species" to (result.species?.scientificNameWithoutAuthor ?: "Unknown"),
@@ -63,7 +63,7 @@ class FirebaseRepository(private val context: Context) {
             "species" to bestSpeciesName,
             "imageUrls" to imageUrls,
             "results" to results,
-            "isFlagged" to false,
+            "isFlagged" to isFlagged,
             "flagReason" to null,
             "isVerified" to false,
             "verifiedBy" to null
