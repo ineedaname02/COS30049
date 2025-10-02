@@ -27,6 +27,8 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.myPlant.data.repository.PlantRepository
 import com.example.myPlant.data.repository.FirebaseRepository
 
+import com.google.firebase.firestore.FirebaseFirestore
+
 class HomeFragment : Fragment() {
 
     private var _binding: FragmentHomeBinding? = null
@@ -37,6 +39,12 @@ class HomeFragment : Fragment() {
     private val selectedImageUris = mutableListOf<Uri>()
 
     private lateinit var firebaseRepository: FirebaseRepository
+
+    // Keep the last response so buttons can use it
+    private var lastResponse: PlantNetResponse? = null
+    private var lastPlantId: String? = null
+
+    private val db = FirebaseFirestore.getInstance()
 
     private val pickImageLauncher = registerForActivityResult(
         ActivityResultContracts.GetMultipleContents()
@@ -72,8 +80,17 @@ class HomeFragment : Fragment() {
 
         viewModel.result.observe(viewLifecycleOwner) { response ->
             showResults(response)
-            firebaseRepository.uploadPlantResult(response, selectedImageUris)
+            lastResponse = response
+
+            firebaseRepository.uploadPlantResult(
+                response,
+                selectedImageUris,
+                isFlagged = false
+            ) { plantId ->
+                lastPlantId = plantId
+            }
         }
+
 
         viewModel.error.observe(viewLifecycleOwner) {
             binding.textHome.text = "Error: $it"
@@ -106,14 +123,60 @@ class HomeFragment : Fragment() {
         val firebaseRepo = FirebaseRepository(requireContext())
 
         binding.buttonCorrect.setOnClickListener {
-            firebaseRepo.uploadPlantResult(response, imageUris, isFlagged = false)
+            lastPlantId?.let { plantId ->
+                firebaseRepository.setFlagStatus(
+                    plantId,
+                    false,  // means "not flagged"
+                    null,
+                    onComplete = {
+                        Toast.makeText(requireContext(), "Marked as correct", Toast.LENGTH_SHORT).show()
+                    },
+                    onError = { e ->
+                        Toast.makeText(requireContext(), "Failed to update flag: ${e.message}", Toast.LENGTH_SHORT).show()
+                    }
+                )
+            } ?: Toast.makeText(requireContext(), "No plant uploaded yet", Toast.LENGTH_SHORT).show()
         }
+
 
         binding.buttonWrong.setOnClickListener {
-            firebaseRepo.uploadPlantResult(response, imageUris, isFlagged = true)
+            // get text from your optional reason EditText
+            val reason = binding.reasonEditText.text.toString().takeIf { it.isNotBlank() }
+
+            lastPlantId?.let { plantId ->
+                firebaseRepository.setFlagStatus(
+                    plantId,
+                    true,   // means "flagged as wrong"
+                    reason,
+                    onComplete = {
+                        Toast.makeText(requireContext(), "Marked as wrong", Toast.LENGTH_SHORT).show()
+                    },
+                    onError = { e ->
+                        Toast.makeText(requireContext(), "Failed to update flag: ${e.message}", Toast.LENGTH_SHORT).show()
+                    }
+                )
+            } ?: Toast.makeText(requireContext(), "No plant uploaded yet", Toast.LENGTH_SHORT).show()
         }
 
+
+
         return root
+    }
+
+    fun setFlagStatus(plantId: String, isFlagged: Boolean, reason: String? = null) {
+        db.collection("plants").document(plantId)
+            .update(
+                mapOf(
+                    "isFlagged" to isFlagged,
+                    "flagReason" to reason
+                )
+            )
+            .addOnSuccessListener {
+                Toast.makeText(context, "Flag status updated.", Toast.LENGTH_SHORT).show()
+            }
+            .addOnFailureListener {
+                Toast.makeText(context, "Failed to update flag: ${it.message}", Toast.LENGTH_SHORT).show()
+            }
     }
 
     private fun prepareImagePart(uri: Uri): MultipartBody.Part {

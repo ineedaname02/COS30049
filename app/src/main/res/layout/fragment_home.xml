@@ -53,6 +53,18 @@
             android:layout_height="wrap_content"
             android:text="Wrong" />
 
+        <EditText
+            android:id="@+id/reasonEditText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Reason for flagging (optional)"
+            android:layout_marginTop="8dp"
+            android:inputType="text"
+            android:lines="2"
+            android:gravity="top|start"
+            android:background="@android:drawable/edit_text"
+            android:padding="8dp" />
+
     </LinearLayout>
 
 

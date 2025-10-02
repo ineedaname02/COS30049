@@ -13,7 +13,7 @@ class FirebaseRepository(private val context: Context) {
     private val storage = FirebaseStorage.getInstance()
     private val db = FirebaseFirestore.getInstance()
 
-    fun uploadPlantResult(response: PlantNetResponse?, imageUris: List<Uri>, isFlagged: Boolean, flagReason: String? = null) {
+    fun uploadPlantResult(response: PlantNetResponse?, imageUris: List<Uri>, isFlagged: Boolean, flagReason: String? = null, onComplete: ((String?) -> Unit)? = null) {
         if (response == null || imageUris.isEmpty()) {
             Toast.makeText(context, "No data to upload", Toast.LENGTH_SHORT).show()
             return
@@ -35,6 +35,7 @@ class FirebaseRepository(private val context: Context) {
                         // Once all images are uploaded
                         if (uploadedCount == imageUris.size) {
                             saveResultToFirestore(response, imageUrls, plantId, isFlagged, flagReason)
+                            onComplete?.invoke(plantId)
                         }
                     }
                 }
@@ -64,7 +65,7 @@ class FirebaseRepository(private val context: Context) {
             "imageUrls" to imageUrls,
             "results" to results,
             "isFlagged" to isFlagged,
-            "flagReason" to null,
+            "flagReason" to flagReason,
             "isVerified" to false,
             "verifiedBy" to null
         )
@@ -77,6 +78,19 @@ class FirebaseRepository(private val context: Context) {
             .addOnFailureListener {
                 Toast.makeText(context, "Firestore error: ${it.message}", Toast.LENGTH_SHORT).show()
             }
+    }
+
+    fun setFlagStatus(plantId: String, isFlagged: Boolean, reason: String? = null, onComplete: (() -> Unit)? = null, onError: ((Exception) -> Unit)? = null) {
+        val updateData = mutableMapOf<String, Any>(
+            "isFlagged" to isFlagged
+        )
+
+        reason?.let { updateData["flagReason"] = it }
+
+        db.collection("plants").document(plantId)
+            .update(updateData)
+            .addOnSuccessListener { onComplete?.invoke() }
+            .addOnFailureListener { e -> onError?.invoke(e) }
     }
 
     fun flagPlant(plantId: String, reason: String?) {
