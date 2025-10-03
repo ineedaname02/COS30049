@@ -90,11 +90,14 @@ dependencies {
     implementation("com.google.firebase:firebase-storage")
     implementation("com.google.firebase:firebase-firestore")
     implementation("com.google.firebase:firebase-auth-ktx")
+    implementation ("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.6.4")
+    implementation ("com.google.android.gms:play-services-location:21.0.1")
+
 
 
     // Add the dependencies for any other desired Firebase products
     // https://firebase.google.com/docs/android/setup#available-libraries
 }
 
-// ✅ Apply the Google Services plugin (required for Firebase)
+
 apply(plugin = "com.google.gms.google-services")
