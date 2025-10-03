@@ -1,108 +1,118 @@
-    package com.example.myPlant
+package com.example.myPlant
 
-    import android.content.Intent
-    import android.os.Bundle
-    import android.widget.*
-    import androidx.appcompat.app.AppCompatActivity
-    import com.example.myPlant.ui.home.HomeFragment
+import android.content.Intent
+import android.os.Bundle
+import android.view.View
+import android.widget.*
+import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import com.example.myPlant.data.repository.AuthRepository
+import com.example.myPlant.data.model.UserProfile
+import com.example.myPlant.data.model.ContributionStats
+import com.example.myPlant.data.model.UserPreferences
+import com.example.myPlant.data.model.NotificationPreferences
+import com.example.myPlant.data.model.PrivacyPreferences
+import com.google.firebase.Timestamp
+import kotlinx.coroutines.launch
 
+class LoginActivity : AppCompatActivity() {
 
-    import com.google.firebase.auth.FirebaseAuth
-    import com.google.firebase.firestore.FirebaseFirestore
+    private lateinit var authRepository: AuthRepository
 
+    private lateinit var emailEditText: EditText
+    private lateinit var passwordEditText: EditText
+    private lateinit var loginButton: Button
+    private lateinit var registerButton: Button
+    private lateinit var progressBar: ProgressBar
 
-    class LoginActivity : AppCompatActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_auth)
 
-        private lateinit var auth: FirebaseAuth
-        private lateinit var db: FirebaseFirestore
+        // Initialize repository
+        authRepository = AuthRepository()
 
-        private lateinit var emailEditText: EditText
-        private lateinit var passwordEditText: EditText
-        private lateinit var loginButton: Button
-        private lateinit var registerButton: Button
+        emailEditText = findViewById(R.id.emailEditText)
+        passwordEditText = findViewById(R.id.passwordEditText)
+        loginButton = findViewById(R.id.loginButton)
+        registerButton = findViewById(R.id.registerButton)
+        progressBar = findViewById(R.id.progressBar)
 
-        override fun onCreate(savedInstanceState: Bundle?) {
-            super.onCreate(savedInstanceState)
-            setContentView(R.layout.activity_auth)
-
-            auth = FirebaseAuth.getInstance()
-            db = FirebaseFirestore.getInstance()
-
-            emailEditText = findViewById(R.id.emailEditText)
-            passwordEditText = findViewById(R.id.passwordEditText)
-            loginButton = findViewById(R.id.loginButton)
-            registerButton = findViewById(R.id.registerButton)
-
-            loginButton.setOnClickListener {
-                loginUser()
-            }
-
-            registerButton.setOnClickListener {
-                registerUser()
-            }
+        // Check if user is already logged in using repository
+        if (authRepository.isUserLoggedIn) {
+            navigateToMainActivity()
+            return
         }
 
-        private fun loginUser() {
-            val email = emailEditText.text.toString().trim()
-            val password = passwordEditText.text.toString().trim()
-
-            if (email.isEmpty() || password.isEmpty()) {
-                Toast.makeText(this, "Please enter email and password", Toast.LENGTH_SHORT).show()
-                return
-            }
-
-            auth.signInWithEmailAndPassword(email, password)
-                .addOnSuccessListener {
-                    val uid = auth.currentUser?.uid
-                    if (uid != null) {
-                        db.collection("users").document(uid).get()
-                            .addOnSuccessListener { document ->
-                                val role = document.getString("role") ?: "user"
-                                goToRoleScreen(role)
-                            }
-                    }
-                }
-                .addOnFailureListener {
-                    Toast.makeText(this, "Login failed: ${it.message}", Toast.LENGTH_SHORT).show()
-                }
+        loginButton.setOnClickListener {
+            loginUser()
         }
 
-        private fun registerUser() {
-            val email = emailEditText.text.toString().trim()
-            val password = passwordEditText.text.toString().trim()
-
-            if (email.isEmpty() || password.isEmpty()) {
-                Toast.makeText(this, "Please enter email and password", Toast.LENGTH_SHORT).show()
-                return
-            }
-
-            auth.createUserWithEmailAndPassword(email, password)
-                .addOnSuccessListener {
-                    val uid = auth.currentUser?.uid
-                    if (uid != null) {
-                        val user = hashMapOf(
-                            "email" to email,
-                            "role" to "user" // Default role
-                        )
-                        db.collection("users").document(uid).set(user)
-                            .addOnSuccessListener {
-                                Toast.makeText(this, "Registered successfully", Toast.LENGTH_SHORT).show()
-                                goToRoleScreen("user")
-                            }
-                    }
-                }
-                .addOnFailureListener {
-                    Toast.makeText(this, "Registration failed: ${it.message}", Toast.LENGTH_SHORT).show()
-                }
-        }
-
-        private fun goToRoleScreen(role: String) {
-            when (role) {
-                "admin" -> startActivity(Intent(this, HomeFragment::class.java))
-                "expert" -> startActivity(Intent(this, HomeFragment::class.java))
-                "user" -> startActivity(Intent(this, HomeFragment::class.java))
-                else -> Toast.makeText(this, "Unknown role: $role", Toast.LENGTH_SHORT).show()
-            }
-            finish()
+        registerButton.setOnClickListener {
+            registerUser()
         }
     }
+
+    private fun loginUser() {
+        val email = emailEditText.text.toString().trim()
+        val password = passwordEditText.text.toString().trim()
+
+        if (email.isEmpty() || password.isEmpty()) {
+            Toast.makeText(this, "Please enter email and password", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        showLoading(true)
+
+        lifecycleScope.launch {
+            val result = authRepository.loginUser(email, password)
+
+            if (result.isSuccess) {
+                Toast.makeText(this@LoginActivity, "Login successful!", Toast.LENGTH_SHORT).show()
+                navigateToMainActivity()
+            } else {
+                Toast.makeText(this@LoginActivity, "Login failed: ${result.exceptionOrNull()?.message}", Toast.LENGTH_SHORT).show()
+            }
+            showLoading(false)
+        }
+    }
+
+    private fun registerUser() {
+        val email = emailEditText.text.toString().trim()
+        val password = passwordEditText.text.toString().trim()
+
+        if (email.isEmpty() || password.isEmpty()) {
+            Toast.makeText(this, "Please enter email and password", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        showLoading(true)
+
+        lifecycleScope.launch {
+            // Create display name from email
+            val displayName = email.substringBefore("@")
+
+            val result = authRepository.registerUser(email, password, displayName)
+
+            if (result.isSuccess) {
+                Toast.makeText(this@LoginActivity, "Registered successfully!", Toast.LENGTH_SHORT).show()
+                navigateToMainActivity()
+            } else {
+                Toast.makeText(this@LoginActivity, "Registration failed: ${result.exceptionOrNull()?.message}", Toast.LENGTH_SHORT).show()
+            }
+            showLoading(false)
+        }
+    }
+
+    private fun navigateToMainActivity() {
+        val intent = Intent(this, MainActivity::class.java)
+        startActivity(intent)
+        finish()
+    }
+
+    private fun showLoading(show: Boolean) {
+        progressBar.visibility = if (show) View.VISIBLE else View.GONE
+        loginButton.isEnabled = !show
+        registerButton.isEnabled = !show
+    }
+}
