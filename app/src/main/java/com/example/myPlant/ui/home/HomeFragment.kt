@@ -136,32 +136,6 @@ class HomeFragment : Fragment() {
             showResults(response)
             lifecycleScope.launch {
                 uploadObservationToFirebase(response)
-
-//                // --- START OF NEW NAVIGATION LOGIC ---
-//                // We're navigating AFTER the PlantNet response and Firebase upload
-//                val topResult = response?.results?.firstOrNull()
-//                val scientificName = topResult?.species?.scientificNameWithoutAuthor
-//                // Convert list to array for navigation argument
-//                val commonNamesArray = topResult?.species?.commonNames?.toTypedArray()
-//
-//                currentLocation?.let { location ->
-//                    val plantNameForMap = topResult?.species?.commonNames?.firstOrNull()
-//                        ?: topResult?.species?.scientificNameWithoutAuthor
-//                        ?: "Identified Plant" // Fallback name
-//
-//                    val action = HomeFragmentDirections.actionNavHomeToNavPlantLocationMap(
-//                        plantLat = location.latitude.toFloat(),
-//                        plantLng = location.longitude.toFloat(),
-//                        plantName = plantNameForMap,
-//                        scientificName = scientificName,
-//                        commonNames = commonNamesArray
-//                    )
-//                    findNavController().navigate(action)
-//                } ?: run {
-//                    // Handle case where location is not available
-//                    Toast.makeText(requireContext(), "Location not available for map display.", Toast.LENGTH_LONG).show()
-//                }
-//                // --- END OF NEW NAVIGATION LOGIC ---
             }
         }
 
@@ -337,8 +311,8 @@ class HomeFragment : Fragment() {
             currentAiSuggestions = viewModel.getAiSuggestionsFromResponse(response)
             Log.d("HomeFragment", "Observation uploaded successfully with ID: $id")
 
-            // Navigate to map AFTER upload is successful
-            findNavController().navigate(R.id.action_global_to_plant_location_map)
+            // Navigate to map AFTER upload is successful, FORCEFULLY HAHA
+            //findNavController().navigate(R.id.action_global_to_plant_location_map)
 
         }.onFailure { exception ->
             Toast.makeText(requireContext(), "Upload failed: ${exception.message}", Toast.LENGTH_SHORT).show()

@@ -91,11 +91,16 @@ class PlantLocationMapFragment : Fragment(), OnMapReadyCallback {
         var markersAdded = 0
 
         for (obs in observations) {
-            // Safely extract data from the map, providing default values.
-            val lat = obs["latitude"] as? Double
-            val lng = obs["longitude"] as? Double
-            val plantName = obs["plantName"] as? String ?: "Observation"
-            val scientificName = obs["scientificName"] as? String ?: "N/A"
+            // 1. Get the nested 'geolocation' map first.
+            val geoMap = obs["geolocation"] as? Map<*, *>
+            // 2. Safely extract 'lat' and 'lng' from the nested map.
+            val lat = geoMap?.get("lat") as? Double
+            val lng = geoMap?.get("lng") as? Double
+
+            // Safely extract other data from the map.
+            val currentIdMap = obs["currentIdentification"] as? Map<*, *>
+            val scientificName = currentIdMap?.get("scientificName") as? String ?: "N/A"
+            val plantName = scientificName // Use scientific name as the primary title
 
             // Only add a marker if both latitude and longitude are valid.
             if (lat != null && lng != null) {
@@ -104,7 +109,7 @@ class PlantLocationMapFragment : Fragment(), OnMapReadyCallback {
                     MarkerOptions()
                         .position(position)
                         .title(plantName)
-                        .snippet(scientificName)
+                        .snippet("Observation") // Snippet can be simplified
                 )
                 boundsBuilder.include(position) // Add the marker's position to the bounds.
                 markersAdded++
