@@ -5,6 +5,7 @@
     android:id="@+id/mobile_navigation"
     app:startDestination="@+id/nav_home">
 
+    <!-- Fragment Destinations -->
     <fragment
         android:id="@+id/nav_home"
         android:name="com.example.myPlant.ui.home.HomeFragment"
@@ -22,4 +23,38 @@
         android:name="com.example.myPlant.ui.slideshow.SlideshowFragment"
         android:label="@string/menu_slideshow"
         tools:layout="@layout/fragment_slideshow" />
+
+    <fragment
+        android:id="@+id/nav_plant_location_map"
+        android:name="com.example.myPlant.ui.plantlocationmap.PlantLocationMapFragment"
+        android:label="@string/menu_plant_location_map"
+        tools:layout="@layout/fragment_plant_location_map" />
+
+
+    <!-- Global Actions for Drawer Navigation -->
+    <action
+        android:id="@+id/action_global_to_home"
+        app:destination="@id/nav_home"
+        app:launchSingleTop="true"
+        app:popUpTo="@id/mobile_navigation"
+        app:popUpToInclusive="true" />
+
+    <action
+        android:id="@+id/action_global_to_plant_location_map"
+        app:destination="@id/nav_plant_location_map"
+        app:launchSingleTop="true"
+        app:popUpTo="@id/nav_home" />
+
+    <action
+        android:id="@+id/action_global_to_gallery"
+        app:destination="@id/nav_gallery"
+        app:launchSingleTop="true"
+        app:popUpTo="@id/nav_home" />
+
+    <action
+        android:id="@+id/action_global_to_slideshow"
+        app:destination="@id/nav_slideshow"
+        app:launchSingleTop="true"
+        app:popUpTo="@id/nav_home" />
+
 </navigation>

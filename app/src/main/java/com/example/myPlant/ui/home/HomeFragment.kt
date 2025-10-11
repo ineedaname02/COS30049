@@ -19,12 +19,16 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.myPlant.BuildConfig
 import com.example.myPlant.LoginActivity
-import com.example.myPlant.PlantViewModelFactory
+import com.example.myPlant.data.model.PlantViewModelFactory
 import com.example.myPlant.data.model.*
-import com.example.myPlant.data.repository.FirebaseRepository
 import com.example.myPlant.data.repository.PlantRepository
 import com.example.myPlant.databinding.FragmentHomeBinding
-import com.google.android.gms.location.*
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.LocationCallback // <-- ADD THIS
+import com.google.android.gms.location.LocationRequest  // <-- ADD THIS
+import com.google.android.gms.location.LocationResult   // <-- ADD THIS
+import com.google.android.gms.location.Priority         // <-- ADD THIS
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -32,6 +36,12 @@ import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
 import java.io.File
 import java.io.FileOutputStream
+import androidx.lifecycle.ViewModelProvider
+import androidx.navigation.fragment.findNavController // <--- This import is necessary
+import com.example.myPlant.data.repository.ObservationRepository // ObservationRepository
+import android.util.Log
+import com.example.myPlant.R
+
 
 class HomeFragment : Fragment() {
 
@@ -41,15 +51,14 @@ class HomeFragment : Fragment() {
     private lateinit var viewModel: PlantViewModel
     private lateinit var adapter: SelectedImagesAdapter
     private val selectedImageUris = mutableListOf<Uri>()
-    private lateinit var firebaseRepository: FirebaseRepository
 
     // Firebase Auth
     private lateinit var auth: FirebaseAuth
 
     // GPS Location
     private lateinit var fusedLocationClient: FusedLocationProviderClient
-    private var currentLocation: Location? = null
 
+    private var currentLocation: Location? = null
     private var currentObservationId: String? = null
     private var currentAiSuggestions: List<AISuggestion> = emptyList()
 
@@ -115,18 +124,44 @@ class HomeFragment : Fragment() {
         // Location client
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(requireActivity())
 
-        // ViewModel setup
-        val repository = PlantRepository(BuildConfig.PLANTNET_API_KEY)
-        val factory = PlantViewModelFactory(repository)
-        viewModel = androidx.lifecycle.ViewModelProvider(this, factory)[PlantViewModel::class.java]
 
-        firebaseRepository = FirebaseRepository(requireContext())
+        // --- START: CORRECTED VIEWMODEL SETUP ---
+         val plantRepository = PlantRepository(BuildConfig.PLANTNET_API_KEY)
+         val observationRepository = ObservationRepository(requireContext()) // Create the second repository
+         val factory = PlantViewModelFactory(plantRepository,observationRepository)
+         viewModel = ViewModelProvider(this, factory)[PlantViewModel::class.java]
 
         // Observe PlantNet API results
         viewModel.result.observe(viewLifecycleOwner) { response ->
             showResults(response)
             lifecycleScope.launch {
                 uploadObservationToFirebase(response)
+
+//                // --- START OF NEW NAVIGATION LOGIC ---
+//                // We're navigating AFTER the PlantNet response and Firebase upload
+//                val topResult = response?.results?.firstOrNull()
+//                val scientificName = topResult?.species?.scientificNameWithoutAuthor
+//                // Convert list to array for navigation argument
+//                val commonNamesArray = topResult?.species?.commonNames?.toTypedArray()
+//
+//                currentLocation?.let { location ->
+//                    val plantNameForMap = topResult?.species?.commonNames?.firstOrNull()
+//                        ?: topResult?.species?.scientificNameWithoutAuthor
+//                        ?: "Identified Plant" // Fallback name
+//
+//                    val action = HomeFragmentDirections.actionNavHomeToNavPlantLocationMap(
+//                        plantLat = location.latitude.toFloat(),
+//                        plantLng = location.longitude.toFloat(),
+//                        plantName = plantNameForMap,
+//                        scientificName = scientificName,
+//                        commonNames = commonNamesArray
+//                    )
+//                    findNavController().navigate(action)
+//                } ?: run {
+//                    // Handle case where location is not available
+//                    Toast.makeText(requireContext(), "Location not available for map display.", Toast.LENGTH_LONG).show()
+//                }
+//                // --- END OF NEW NAVIGATION LOGIC ---
             }
         }
 
@@ -134,7 +169,7 @@ class HomeFragment : Fragment() {
             binding.textHome.text = "Error: $it"
         }
 
-        setupUI()
+        setupClickListeners()
         return root
     }
 
@@ -146,8 +181,7 @@ class HomeFragment : Fragment() {
         }
     }
 
-    private fun setupUI() {
-        // Upload button
+    private fun setupClickListeners() {
         binding.buttonUpload.setOnClickListener {
             if (!isUserAuthenticated()) {
                 Toast.makeText(requireContext(), "Please log in to upload images", Toast.LENGTH_LONG).show()
@@ -156,7 +190,6 @@ class HomeFragment : Fragment() {
             pickImageLauncher.launch("image/*")
         }
 
-        // Send button
         binding.buttonSend.setOnClickListener {
             if (!isUserAuthenticated()) {
                 Toast.makeText(requireContext(), "Please log in to identify plants", Toast.LENGTH_LONG).show()
@@ -164,6 +197,7 @@ class HomeFragment : Fragment() {
             }
 
             if (selectedImageUris.isNotEmpty()) {
+                // ... (your existing PlantNet API call logic is correct) ...
                 val imageParts = selectedImageUris.map { uri -> prepareImagePart(uri) }
                 val organParts = List(imageParts.size) {
                     MultipartBody.Part.createFormData("organs", "leaf")
@@ -178,51 +212,36 @@ class HomeFragment : Fragment() {
             }
         }
 
-        // Correct button
+        // ✅ CORRECTED "Correct" button listener
         binding.buttonCorrect.setOnClickListener {
-            if (!isUserAuthenticated()) {
-                Toast.makeText(requireContext(), "Please log in to confirm identifications", Toast.LENGTH_LONG).show()
-                return@setOnClickListener
-            }
-
-            currentObservationId?.let { observationId ->
+            currentObservationId?.let { obsId ->
                 val topSuggestion = currentAiSuggestions.firstOrNull()
                 if (topSuggestion != null) {
                     lifecycleScope.launch {
-                        firebaseRepository.confirmObservation(
-                            observationId = observationId,
-                            plantId = topSuggestion.plantId,
-                            scientificName = topSuggestion.scientificName
-                        ).onSuccess {
-                            Toast.makeText(requireContext(), "Thanks for confirming! Added to training data.", Toast.LENGTH_SHORT).show()
+                        // Call ViewModel instead of firebaseRepository
+                        val result = viewModel.confirmObservation(obsId, topSuggestion.plantId, topSuggestion.scientificName)
+                        result.onSuccess {
+                            Toast.makeText(requireContext(), "Thanks for confirming!", Toast.LENGTH_SHORT).show()
                             resetUI()
-                        }.onFailure { exception ->
-                            Toast.makeText(requireContext(), "Confirmation failed: ${exception.message}", Toast.LENGTH_SHORT).show()
+                        }.onFailure { e ->
+                            Toast.makeText(requireContext(), "Confirmation failed: ${e.message}", Toast.LENGTH_SHORT).show()
                         }
                     }
-                } else {
-                    Toast.makeText(requireContext(), "No AI suggestions available", Toast.LENGTH_SHORT).show()
                 }
             } ?: Toast.makeText(requireContext(), "No observation to confirm", Toast.LENGTH_SHORT).show()
         }
 
-        // Wrong button
+        // ✅ CORRECTED "Wrong" button listener
         binding.buttonWrong.setOnClickListener {
-            if (!isUserAuthenticated()) {
-                Toast.makeText(requireContext(), "Please log in to flag identifications", Toast.LENGTH_LONG).show()
-                return@setOnClickListener
-            }
-
-            currentObservationId?.let { observationId ->
+            currentObservationId?.let { obsId ->
                 lifecycleScope.launch {
-                    firebaseRepository.flagObservation(
-                        observationId = observationId,
-                        reason = "unsure"
-                    ).onSuccess {
-                        Toast.makeText(requireContext(), "Image sent to experts for review.", Toast.LENGTH_LONG).show()
+                    // Call ViewModel instead of firebaseRepository
+                    val result = viewModel.flagObservation(obsId, "unsure")
+                    result.onSuccess {
+                        Toast.makeText(requireContext(), "Observation flagged for review.", Toast.LENGTH_LONG).show()
                         resetUI()
-                    }.onFailure { exception ->
-                        Toast.makeText(requireContext(), "Flagging failed: ${exception.message}", Toast.LENGTH_SHORT).show()
+                    }.onFailure { e ->
+                        Toast.makeText(requireContext(), "Flagging failed: ${e.message}", Toast.LENGTH_SHORT).show()
                     }
                 }
             } ?: Toast.makeText(requireContext(), "No observation to flag", Toast.LENGTH_SHORT).show()
@@ -284,11 +303,9 @@ class HomeFragment : Fragment() {
             ) != PackageManager.PERMISSION_GRANTED
         ) return
 
-        val locationRequest = LocationRequest.create().apply {
-            interval = 10000
-            fastestInterval = 5000
-            priority = LocationRequest.PRIORITY_HIGH_ACCURACY
-        }
+        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 10000).apply {
+            setMinUpdateIntervalMillis(5000)
+        }.build()
 
         fusedLocationClient.requestLocationUpdates(
             locationRequest,
@@ -306,42 +323,23 @@ class HomeFragment : Fragment() {
         )
     }
 
+    // ✅ CORRECTED uploadObservationToFirebase to use ViewModel
     private suspend fun uploadObservationToFirebase(response: PlantNetResponse?) {
-        // Double-check authentication before upload
-        if (!isUserAuthenticated()) {
-            Toast.makeText(requireContext(), "Please log in to upload observations", Toast.LENGTH_LONG).show()
-            return
-        }
+        val geoLocation = currentLocation?.let { GeoLocation(it.latitude, it.longitude) }
 
-        val geoLocation = currentLocation?.let {
-            GeoLocation(it.latitude, it.longitude)
-        }
+        // This call is now much cleaner
+        val result = viewModel.uploadPlantObservation(response, selectedImageUris, geoLocation)
 
-        val smartPlantAISuggestions = emptyList<AISuggestion>() // future AI
-
-        firebaseRepository.uploadPlantObservation(
-            plantNetResponse = response,
-            smartPlantAISuggestions = smartPlantAISuggestions,
-            imageUris = selectedImageUris,
-            userNote = "User submitted plant for identification",
-            location = geoLocation
-        ).onSuccess { id ->
+        result.onSuccess { id ->
             currentObservationId = id
-            currentAiSuggestions = response?.results?.mapIndexed { index, plantNetResult ->
-                AISuggestion(
-                    suggestionId = "plantnet_$index",
-                    source = "plantnet",
-                    plantId = generatePlantId(plantNetResult),
-                    scientificName = plantNetResult.species?.scientificNameWithoutAuthor ?: "Unknown",
-                    commonNames = plantNetResult.species?.commonNames ?: emptyList(),
-                    confidence = plantNetResult.score ?: 0.0,
-                    externalIds = ExternalIds(
-                        plantNetId = plantNetResult.species?.scientificNameWithoutAuthor,
-                        gbifId = plantNetResult.gbif?.id?.toString(),
-                        powoId = plantNetResult.powo?.id
-                    )
-                )
-            } ?: emptyList()
+            // The mapping logic from your original function is now in the repository, which is correct.
+            // We just need to get the suggestions list back for the confirm/flag buttons.
+            currentAiSuggestions = viewModel.getAiSuggestionsFromResponse(response)
+            Log.d("HomeFragment", "Observation uploaded successfully with ID: $id")
+
+            // Navigate to map AFTER upload is successful
+            findNavController().navigate(R.id.action_global_to_plant_location_map)
+
         }.onFailure { exception ->
             Toast.makeText(requireContext(), "Upload failed: ${exception.message}", Toast.LENGTH_SHORT).show()
         }
@@ -352,29 +350,34 @@ class HomeFragment : Fragment() {
         return scientificName.replace("[^A-Za-z0-9]".toRegex(), "_").lowercase()
     }
 
+    // ✅ MERGED and CORRECTED showResults function
     private fun showResults(response: PlantNetResponse?) {
         val results = response?.results
         if (results.isNullOrEmpty()) {
-            binding.textHome.text = "No results found"
+            binding.textHome.text = "Could not identify the plant. Please try other images."
             return
         }
 
         val sb = StringBuilder("🌿 PlantNet Identification Results:\n\n")
-        for (result in results.take(3)) {
+        results.take(3).forEach { result ->
             val speciesName = result.species?.scientificNameWithoutAuthor ?: "Unknown"
-            val commonName = result.species?.commonNames?.joinToString() ?: "No common name"
+            val commonName = result.species?.commonNames?.joinToString() ?: "N/A"
             val confidencePercent = (result.score ?: 0.0) * 100
             sb.append("🔍 Species: $speciesName\n")
             sb.append("📝 Common: $commonName\n")
             sb.append("🎯 Confidence: ${"%.1f".format(confidencePercent)}%\n---\n")
         }
 
-        currentLocation?.let { location ->
-            sb.append("\n📍 Location: ${"%.6f".format(location.latitude)}, ${"%.6f".format(location.longitude)}\n")
+        currentLocation?.let {
+            sb.append("\n📍 Location captured.\n")
         }
 
-        sb.append("\nPlease confirm if the identification is correct or flag for expert review.")
-        binding.textHome.text = sb.toString().trim()
+        sb.append("\nPlease confirm if the top result is correct.")
+        binding.textHome.text = sb.toString()
+
+        // Show the Correct/Wrong buttons now that we have a result
+        binding.buttonCorrect.visibility = View.VISIBLE
+        binding.buttonWrong.visibility = View.VISIBLE
     }
 
     private fun prepareImagePart(uri: Uri): MultipartBody.Part {
@@ -407,6 +410,7 @@ class HomeFragment : Fragment() {
         currentObservationId = null
         currentAiSuggestions = emptyList()
         currentLocation = null
+        // Null out adapter and layout manager to free up resources and clear the RecyclerView display
         binding.imageRecyclerView.adapter = null
         binding.imageRecyclerView.layoutManager = null
         binding.textHome.text = "Upload plant images for identification"
