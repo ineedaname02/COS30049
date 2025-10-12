@@ -12,6 +12,7 @@ import com.example.myPlant.data.model.ContributionStats
 import com.example.myPlant.data.model.UserPreferences
 import com.example.myPlant.data.model.NotificationPreferences
 import com.example.myPlant.data.model.PrivacyPreferences
+import com.example.myPlant.ui.admin.AdminDashboardActivity
 import com.google.firebase.Timestamp
 import kotlinx.coroutines.launch
 
@@ -65,17 +66,49 @@ class LoginActivity : AppCompatActivity() {
         showLoading(true)
 
         lifecycleScope.launch {
-            val result = authRepository.loginUser(email, password)
+            val loginResult = authRepository.loginUser(email, password)
 
-            if (result.isSuccess) {
-                Toast.makeText(this@LoginActivity, "Login successful!", Toast.LENGTH_SHORT).show()
-                navigateToMainActivity()
+            if (loginResult.isSuccess) {
+                val user = loginResult.getOrNull()
+                user?.let {
+                    // Fetch Firestore user profile to check role
+                    val profileResult = authRepository.getUserProfile(it.uid)
+                    if (profileResult.isSuccess) {
+                        val profile = profileResult.getOrNull()
+                        when (profile?.role) {
+                            "admin" -> {
+                                Toast.makeText(this@LoginActivity, "Welcome, admin!", Toast.LENGTH_SHORT).show()
+                                val intent = Intent(this@LoginActivity, MainActivity::class.java)
+                                intent.putExtra("isAdmin", true)
+                                startActivity(intent)
+                            }
+                            "public" -> {
+                                Toast.makeText(this@LoginActivity, "Login successful!", Toast.LENGTH_SHORT).show()
+                                val intent = Intent(this@LoginActivity, MainActivity::class.java)
+                                intent.putExtra("isAdmin", false)
+                                startActivity(intent)
+                            }
+                            else -> {
+                                Toast.makeText(this@LoginActivity, "Invalid user role.", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                        finish()
+                    } else {
+                        Toast.makeText(this@LoginActivity, "Failed to load user profile", Toast.LENGTH_SHORT).show()
+                    }
+                }
             } else {
-                Toast.makeText(this@LoginActivity, "Login failed: ${result.exceptionOrNull()?.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(
+                    this@LoginActivity,
+                    "Login failed: ${loginResult.exceptionOrNull()?.message}",
+                    Toast.LENGTH_SHORT
+                ).show()
             }
+
             showLoading(false)
         }
     }
+
 
     private fun registerUser() {
         val email = emailEditText.text.toString().trim()
