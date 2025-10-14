@@ -20,14 +20,16 @@ import com.google.android.gms.maps.model.LatLng
 import com.google.android.gms.maps.model.LatLngBounds
 import com.google.android.gms.maps.model.MarkerOptions
 import com.example.myPlant.BuildConfig
+import com.google.maps.android.heatmaps.HeatmapTileProvider
+import com.google.maps.android.heatmaps.Gradient
+import android.graphics.Color
+import com.google.android.gms.maps.model.TileOverlayOptions
 class PlantLocationMapFragment : Fragment(), OnMapReadyCallback {
 
     private lateinit var googleMap: GoogleMap
 
     // Use activityViewModels to share the ViewModel across fragments.
     private val viewModel: PlantViewModel by activityViewModels {
-        // ✅ Use the new, cleaner factory
-
         PlantViewModelFactory(
             plantRepository = PlantRepository(BuildConfig.PLANTNET_API_KEY),
             observationRepository = ObservationRepository(requireContext())
@@ -38,7 +40,6 @@ class PlantLocationMapFragment : Fragment(), OnMapReadyCallback {
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
-        // This is a standard and clean way to inflate the layout.
         return inflater.inflate(R.layout.fragment_plant_location_map, container, false)
     }
 
@@ -76,51 +77,60 @@ class PlantLocationMapFragment : Fragment(), OnMapReadyCallback {
                 Log.d("PlantLocationMap", "No observations found to display.")
                 return@observe
             }
-            // Clear previous markers to prevent duplicates on data refresh.
             googleMap.clear()
-            addMarkersToMap(observations)
+            addHeatmapToMap(observations)
         }
     }
-
     /**
-     * Adds markers for each observation to the map and moves the camera to fit them all.
+     * ✅ REPLACED `addMarkersToMap` WITH THIS NEW FUNCTION
+     * Creates a heatmap layer from the observation data.
      */
-    private fun addMarkersToMap(observations: List<Map<String, Any>>) {
-        // LatLngBounds will help us zoom to fit all markers on the screen.
+    private fun addHeatmapToMap(observations: List<Map<String, Any>>) {
+        val latLngs = mutableListOf<LatLng>()
         val boundsBuilder = LatLngBounds.Builder()
-        var markersAdded = 0
 
         for (obs in observations) {
-            // 1. Get the nested 'geolocation' map first.
             val geoMap = obs["geolocation"] as? Map<*, *>
-            // 2. Safely extract 'lat' and 'lng' from the nested map.
             val lat = geoMap?.get("lat") as? Double
             val lng = geoMap?.get("lng") as? Double
 
-            // Safely extract other data from the map.
-            val currentIdMap = obs["currentIdentification"] as? Map<*, *>
-            val scientificName = currentIdMap?.get("scientificName") as? String ?: "N/A"
-            val plantName = scientificName // Use scientific name as the primary title
-
-            // Only add a marker if both latitude and longitude are valid.
             if (lat != null && lng != null) {
                 val position = LatLng(lat, lng)
-                googleMap.addMarker(
-                    MarkerOptions()
-                        .position(position)
-                        .title(plantName)
-                        .snippet("Observation") // Snippet can be simplified
-                )
-                boundsBuilder.include(position) // Add the marker's position to the bounds.
-                markersAdded++
+                latLngs.add(position) // Add position to the list for the heatmap
+                boundsBuilder.include(position) // Also add to bounds for zooming
             }
         }
 
-        // Only move the camera if at least one valid marker was added.
-        if (markersAdded > 0) {
-            val bounds = boundsBuilder.build()
-            // Animate the camera to show all markers with a 100dp padding.
-            googleMap.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, 100))
+        if (latLngs.isEmpty()) {
+            Log.d("PlantLocationMap", "No valid LatLngs found for heatmap.")
+            return
         }
+
+        // --- HEATMAP CREATION ---
+
+        // 1. Define the color gradient for the heatmap
+        // (e.g., from transparent blue to hot red)
+        val gradient = Gradient(
+            intArrayOf(Color.BLUE, Color.GREEN, Color.YELLOW, Color.RED), // Colors
+            floatArrayOf(0.2f, 0.4f, 0.6f, 1.0f) // Start points for each color
+        )
+
+        // 2. Create the heatmap provider with our location data
+        val heatmapProvider = HeatmapTileProvider.Builder()
+            .data(latLngs)
+            .gradient(gradient)
+            .radius(50) // Adjust radius for desired "blob" size
+            .build()
+
+        // 3. Add the heatmap as a tile overlay on the map
+        googleMap.addTileOverlay(
+            TileOverlayOptions().tileProvider(heatmapProvider)
+        )
+
+        // --- END HEATMAP CREATION ---
+
+        // Animate camera to show the area where data exists
+        val bounds = boundsBuilder.build()
+        googleMap.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, 100))
     }
 }

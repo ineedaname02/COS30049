@@ -101,8 +101,8 @@ dependencies {
     // Add the dependencies for any other desired Firebase products
     // https://firebase.google.com/docs/android/setup#available-libraries
 
-
-    implementation ("com.google.android.gms:play-services-maps:18.1.0")
+    implementation("com.google.maps.android:maps-utils-ktx:3.4.0")
+    implementation("com.google.android.gms:play-services-maps:18.1.0")
     implementation("com.google.android.gms:play-services-location:21.0.1") // Often needed with maps for FusedLocationProviderClient
     // OkHttp for network requests
     implementation("com.squareup.okhttp3:okhttp:4.11.0") // Check for latest version
@@ -122,8 +122,4 @@ dependencies {
     implementation(libs.material)
     implementation(libs.androidx.navigation.fragment.ktx)
     implementation(libs.androidx.navigation.ui.ktx)
-
 }
-
-//no need apply(plugin = "com.google.gms.google-services")
-//no need apply(plugin = "androidx.navigation.safeargs.kotlin")
