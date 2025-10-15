@@ -24,9 +24,23 @@ import com.google.maps.android.heatmaps.HeatmapTileProvider
 import com.google.maps.android.heatmaps.Gradient
 import android.graphics.Color
 import com.google.android.gms.maps.model.TileOverlayOptions
+import com.google.android.material.switchmaterial.SwitchMaterial
+import kotlin.text.format
+import com.google.firebase.Timestamp
+import java.text.SimpleDateFormat
+import java.util.Locale
+import com.google.android.gms.maps.model.*
+
 class PlantLocationMapFragment : Fragment(), OnMapReadyCallback {
 
     private lateinit var googleMap: GoogleMap
+    private lateinit var heatmapToggle: SwitchMaterial
+    private var isHeatmapMode = true // Default to heatmap mode
+
+    private var lastObservations: List<Map<String, Any>>? = null
+    private var heatmapOverlay: TileOverlay? = null
+    private var isMapReady = false // ✅ Track if the map is initialized
+
 
     // Use activityViewModels to share the ViewModel across fragments.
     private val viewModel: PlantViewModel by activityViewModels {
@@ -40,14 +54,65 @@ class PlantLocationMapFragment : Fragment(), OnMapReadyCallback {
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
-        return inflater.inflate(R.layout.fragment_plant_location_map, container, false)
+        val view = inflater.inflate(R.layout.fragment_plant_location_map, container, false)
+        heatmapToggle = view.findViewById(R.id.toggle_heatmap)
+        return view
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        // Set up the map and start loading data.
         setupMap()
+
+        heatmapToggle.setOnCheckedChangeListener { _, isChecked ->
+            isHeatmapMode = isChecked
+            if (isMapReady) {
+                updateMapDisplay()
+            }
+        }
+    }
+
+    override fun onMapReady(map: GoogleMap) {
+        // --- This is the guaranteed safe place to initialize and use the map ---
+        googleMap = map
+        isMapReady = true // ✅ Mark the map as ready
+        Log.d("PlantLocationMap", "Google Map is ready.")
+
+        // Start observing ViewModel data only AFTER the map is ready
+        observeObservations()
+
+        // Load the initial data
         viewModel.loadAllObservations()
+    }
+
+    private fun observeObservations() {
+        viewModel.allObservations.observe(viewLifecycleOwner) { observations ->
+            if (observations.isNullOrEmpty()) {
+                Log.d("PlantLocationMap", "No observations found to display.")
+                return@observe
+            }
+            // Store the data and update the map display based on the current mode
+            lastObservations = observations
+            updateMapDisplay()
+        }
+    }
+
+    private fun updateMapDisplay() {
+        // A check just in case, though the logic flow should prevent this
+        if (!::googleMap.isInitialized) {
+            Log.e("PlantLocationMap", "updateMapDisplay called before googleMap was initialized.")
+            return
+        }
+
+        googleMap.clear()
+        heatmapOverlay = null
+
+        lastObservations?.let { observations ->
+            if (isHeatmapMode) {
+                addHeatmapToMap(observations)
+            } else {
+                addMarkersToMap(observations)
+            }
+        }
     }
 
     /**
@@ -59,34 +124,9 @@ class PlantLocationMapFragment : Fragment(), OnMapReadyCallback {
     }
 
     /**
-     * This callback is triggered when the map is ready to be used.
-     * This is the main entry point for map interaction.
+     * Creates and adds individual markers to the map.
      */
-    override fun onMapReady(map: GoogleMap) {
-        googleMap = map
-        observeObservations()
-    }
-
-    /**
-     * Observes the LiveData from the ViewModel and updates the map when data changes.
-     */
-    private fun observeObservations() {
-        viewModel.allObservations.observe(viewLifecycleOwner) { observations ->
-            // Defensive check to ensure we don't process null or empty data.
-            if (observations.isNullOrEmpty()) {
-                Log.d("PlantLocationMap", "No observations found to display.")
-                return@observe
-            }
-            googleMap.clear()
-            addHeatmapToMap(observations)
-        }
-    }
-    /**
-     * ✅ REPLACED `addMarkersToMap` WITH THIS NEW FUNCTION
-     * Creates a heatmap layer from the observation data.
-     */
-    private fun addHeatmapToMap(observations: List<Map<String, Any>>) {
-        val latLngs = mutableListOf<LatLng>()
+    private fun addMarkersToMap(observations: List<Map<String, Any>>) {
         val boundsBuilder = LatLngBounds.Builder()
 
         for (obs in observations) {
@@ -96,41 +136,69 @@ class PlantLocationMapFragment : Fragment(), OnMapReadyCallback {
 
             if (lat != null && lng != null) {
                 val position = LatLng(lat, lng)
-                latLngs.add(position) // Add position to the list for the heatmap
-                boundsBuilder.include(position) // Also add to bounds for zooming
+
+                // Extract details for the marker's info window
+                val currentIdMap = obs["currentIdentification"] as? Map<*, *>
+                val scientificName = currentIdMap?.get("scientificName") as? String ?: "N/A"
+
+                val timestamp = obs["timestamp"] as? com.google.firebase.Timestamp // Use the full path to be explicit
+                val dateString = timestamp?.toDate()?.let {
+                    SimpleDateFormat("dd MMM yyyy", java.util.Locale.getDefault()).format(it)
+                } ?: "Unknown date"
+
+                // Rarity would be a complex calculation, so we'll use confidence as a proxy for now
+                val confidence = (currentIdMap?.get("confidence") as? Double)?.let {
+                    "Confidence: ${"%.1f".format(it * 100)}%"
+                } ?: ""
+
+                googleMap.addMarker(
+                    MarkerOptions()
+                        .position(position)
+                        .title(scientificName)
+                        .snippet("$dateString | $confidence")
+                )
+                boundsBuilder.include(position)
             }
         }
 
-        if (latLngs.isEmpty()) {
-            Log.d("PlantLocationMap", "No valid LatLngs found for heatmap.")
-            return
+        if (boundsBuilder.build().center != LatLng(0.0, 0.0)) {
+            googleMap.animateCamera(CameraUpdateFactory.newLatLngBounds(boundsBuilder.build(), 100))
+        }
+    }
+
+    /**
+     * Creates and adds a heatmap layer to the map.
+     */
+    private fun addHeatmapToMap(observations: List<Map<String, Any>>) {
+        val latLngs = mutableListOf<LatLng>()
+        for (obs in observations) {
+            val geoMap = obs["geolocation"] as? Map<*, *>
+            val lat = geoMap?.get("lat") as? Double
+            val lng = geoMap?.get("lng") as? Double
+            if (lat != null && lng != null) {
+                latLngs.add(LatLng(lat, lng))
+            }
         }
 
-        // --- HEATMAP CREATION ---
+        if (latLngs.isEmpty()) return
 
-        // 1. Define the color gradient for the heatmap
-        // (e.g., from transparent blue to hot red)
         val gradient = Gradient(
-            intArrayOf(Color.BLUE, Color.GREEN, Color.YELLOW, Color.RED), // Colors
-            floatArrayOf(0.2f, 0.4f, 0.6f, 1.0f) // Start points for each color
+            intArrayOf(Color.BLUE, Color.GREEN, Color.YELLOW, Color.RED),
+            floatArrayOf(0.2f, 0.4f, 0.6f, 1.0f)
         )
 
-        // 2. Create the heatmap provider with our location data
         val heatmapProvider = HeatmapTileProvider.Builder()
             .data(latLngs)
             .gradient(gradient)
-            .radius(50) // Adjust radius for desired "blob" size
+            .radius(50)
             .build()
 
-        // 3. Add the heatmap as a tile overlay on the map
-        googleMap.addTileOverlay(
-            TileOverlayOptions().tileProvider(heatmapProvider)
-        )
+        // Add the overlay and store it
+        heatmapOverlay = googleMap.addTileOverlay(TileOverlayOptions().tileProvider(heatmapProvider))
 
-        // --- END HEATMAP CREATION ---
-
-        // Animate camera to show the area where data exists
-        val bounds = boundsBuilder.build()
-        googleMap.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, 100))
+        // Zoom to show all points
+        val boundsBuilder = LatLngBounds.Builder()
+        latLngs.forEach { boundsBuilder.include(it) }
+        googleMap.animateCamera(CameraUpdateFactory.newLatLngBounds(boundsBuilder.build(), 100))
     }
 }

@@ -12,5 +12,6 @@
     <string name="menu_slideshow">Slideshow</string>
     <string name="menu_identify_plant">Identify Plant</string>
     <string name="menu_plant_location_map">Plant Location Map</string>
+    <string name="heatmap_mode">Heatmap Mode</string>
 
 </resources>

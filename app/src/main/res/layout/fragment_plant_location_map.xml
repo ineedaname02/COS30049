@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    <!-- 1. Use a RelativeLayout to allow overlaying views -->
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -11,4 +12,15 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-</FrameLayout>
+    <!-- 2. Add a Switch to toggle between Heatmap and Markers -->
+    <com.google.android.material.switchmaterial.SwitchMaterial
+        android:id="@+id/toggle_heatmap"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_alignParentTop="true"
+        android:layout_alignParentEnd="true"
+        android:layout_margin="16dp"
+        android:text="@string/heatmap_mode"
+        android:checked="true" />
+
+</RelativeLayout>
