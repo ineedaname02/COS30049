@@ -3,6 +3,7 @@ package com.example.myPlant
 import android.content.Intent
 import android.os.Bundle
 import android.view.Menu
+import android.widget.Button
 import com.google.android.material.snackbar.Snackbar
 import com.google.android.material.navigation.NavigationView
 import androidx.navigation.findNavController
@@ -15,6 +16,7 @@ import androidx.appcompat.app.AppCompatActivity
 import com.example.myPlant.databinding.ActivityMainBinding
 import com.google.firebase.auth.FirebaseAuth
 import com.example.myPlant.ui.admin.AdminDashboardActivity
+import com.example.myPlant.ui.IotDashboardActivity
 
 class MainActivity : AppCompatActivity() {
 
@@ -75,6 +77,7 @@ class MainActivity : AppCompatActivity() {
                     finish()
                     true
                 }
+
                 else -> {
                     val handled = androidx.navigation.ui.NavigationUI.onNavDestinationSelected(
                         menuItem, navController
@@ -87,7 +90,6 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
-        // Inflate the menu; this adds items to the action bar if it is present.
         menuInflater.inflate(R.menu.main, menu)
         return true
     }
@@ -96,7 +98,4 @@ class MainActivity : AppCompatActivity() {
         val navController = findNavController(R.id.nav_host_fragment_content_main)
         return navController.navigateUp(appBarConfiguration) || super.onSupportNavigateUp()
     }
-
-
 }
-
