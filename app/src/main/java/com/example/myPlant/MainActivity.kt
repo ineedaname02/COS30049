@@ -14,7 +14,6 @@ import androidx.drawerlayout.widget.DrawerLayout
 import androidx.appcompat.app.AppCompatActivity
 import com.example.myPlant.databinding.ActivityMainBinding
 import com.google.firebase.auth.FirebaseAuth
-import com.example.myPlant.ui.admin.AdminDashboardActivity
 
 class MainActivity : AppCompatActivity() {
 
@@ -64,8 +63,9 @@ class MainActivity : AppCompatActivity() {
         navView.setNavigationItemSelectedListener { menuItem ->
             when (menuItem.itemId) {
                 R.id.nav_admin_dashboard -> {
-                    // Open Admin Dashboard Activity
-                    startActivity(Intent(this, AdminDashboardActivity::class.java))
+                    // Navigate to Admin Dashboard Fragment
+                    navController.navigate(R.id.nav_admin_dashboard)
+                    drawerLayout.closeDrawers()
                     true
                 }
 
