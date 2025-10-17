@@ -22,11 +22,13 @@
         android:theme="@style/Theme.COS30049"
         tools:targetApi="31">
         <activity
-            android:name=".ui.admin.AdminDashboardFragment"
+            android:name=".LoginActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ui.admin.AdminDashboardActivity"
             android:exported="false"
             android:label="@string/title_activity_admin_dashboard"
-            android:theme="@style/Theme.COS30049" />
-        <activity android:name=".LoginActivity" />
+            android:theme="@style/Theme.COS30049.NoActionBar" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
