@@ -9,11 +9,11 @@ import androidx.lifecycle.lifecycleScope
 import com.example.myPlant.data.repository.AuthRepository
 import com.example.myPlant.data.model.UserProfile
 import com.example.myPlant.data.model.ContributionStats
-import com.example.myPlant.data.model.UserPreferences
 import com.example.myPlant.data.model.NotificationPreferences
 import com.example.myPlant.data.model.PrivacyPreferences
 import com.google.firebase.Timestamp
 import kotlinx.coroutines.launch
+import com.example.myPlant.data.local.UserPreferences
 
 class LoginActivity : AppCompatActivity() {
 
@@ -74,17 +74,22 @@ class LoginActivity : AppCompatActivity() {
                     val profileResult = authRepository.getUserProfile(it.uid)
                     if (profileResult.isSuccess) {
                         val profile = profileResult.getOrNull()
+                        val userPrefs = UserPreferences(this@LoginActivity) // <-- add this
                         when (profile?.role) {
                             "admin" -> {
+                                // Save role locally
+                                userPrefs.userRole = "admin"
+
                                 Toast.makeText(this@LoginActivity, "Welcome, admin!", Toast.LENGTH_SHORT).show()
                                 val intent = Intent(this@LoginActivity, MainActivity::class.java)
-                                intent.putExtra("isAdmin", true)
                                 startActivity(intent)
                             }
                             "public" -> {
+                                // Save role locally
+                                userPrefs.userRole = "public"
+
                                 Toast.makeText(this@LoginActivity, "Login successful!", Toast.LENGTH_SHORT).show()
                                 val intent = Intent(this@LoginActivity, MainActivity::class.java)
-                                intent.putExtra("isAdmin", false)
                                 startActivity(intent)
                             }
                             else -> {
@@ -107,6 +112,7 @@ class LoginActivity : AppCompatActivity() {
             showLoading(false)
         }
     }
+
 
 
     private fun registerUser() {

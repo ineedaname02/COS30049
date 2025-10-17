@@ -17,6 +17,8 @@ import com.example.myPlant.databinding.ActivityMainBinding
 import com.google.firebase.auth.FirebaseAuth
 import com.example.myPlant.ui.admin.AdminDashboardActivity
 import com.example.myPlant.ui.IotDashboardActivity
+import com.example.myPlant.data.local.UserPreferences
+
 
 class MainActivity : AppCompatActivity() {
 
@@ -60,7 +62,9 @@ class MainActivity : AppCompatActivity() {
 
         // 👇 Safely show admin group if user is admin
         val navMenu = navView.menu
-        val isAdmin = intent.getBooleanExtra("isAdmin", false)
+        val userPrefs = UserPreferences(this)
+        val role = userPrefs.userRole
+        val isAdmin = role == "admin" // true if admin
         navMenu.setGroupVisible(R.id.admin_group, isAdmin)
 
         navView.setNavigationItemSelectedListener { menuItem ->
@@ -73,10 +77,13 @@ class MainActivity : AppCompatActivity() {
 
                 R.id.nav_logout -> {
                     FirebaseAuth.getInstance().signOut()
+                    val userPrefs = UserPreferences(this)
+                    userPrefs.clear() // clear saved role
                     startActivity(Intent(this, LoginActivity::class.java))
                     finish()
                     true
                 }
+
 
                 else -> {
                     val handled = androidx.navigation.ui.NavigationUI.onNavDestinationSelected(
