@@ -20,108 +20,111 @@ class FirebaseRepository(private val context: Context) {
     private val observationsCollection = db.collection("observations")
     private val trainingDataCollection = db.collection("trainingData")
     private val flagQueueCollection = db.collection("flagQueue")
-    private val plantsCollection = db.collection("plants") // Master plant catalog
+    private val plantsCollection = db.collection("plants")
 
+    /**
+     * Upload a new plant observation with AI/PlantNet data and images.
+     */
     suspend fun uploadPlantObservation(
         plantNetResponse: PlantNetResponse?,
-        smartPlantAISuggestions: List<AISuggestion> = emptyList(), // For future AI model
+        smartPlantAISuggestions: List<AISuggestion> = emptyList(),
         imageUris: List<Uri>,
         userNote: String = "",
-        location: GeoLocation? = null
-    ): kotlin.Result<String> {
-        return try {
-            val currentUser = auth.currentUser
-            if (currentUser == null) {
-                return kotlin.Result.failure(Exception("User not authenticated"))
-            }
+        location: GeoLocation? = null,
+        iucnCategory: String? = null
+    ): String {
+        val currentUser = auth.currentUser ?: throw Exception("User not authenticated")
+        if (imageUris.isEmpty()) throw Exception("No images to upload")
 
-            if (imageUris.isEmpty()) {
-                return kotlin.Result.failure(Exception("No images to upload"))
-            }
+        // 1️⃣ Upload images
+        val observationId = UUID.randomUUID().toString()
+        val imageUrls = uploadImagesToStorage(observationId, imageUris)
 
-            // 1. Upload images to Firebase Storage
-            val observationId = UUID.randomUUID().toString()
-            val imageUrls = uploadImagesToStorage(observationId, imageUris)
-
-            // 2. Convert PlantNet response to our AISuggestion format
-            val plantNetSuggestions = plantNetResponse?.results?.mapIndexed { index, result ->
-                AISuggestion(
-                    suggestionId = "plantnet_${UUID.randomUUID()}",
-                    source = "plantnet",
-                    plantId = generatePlantId(result), // Generate consistent plant ID
-                    scientificName = result.species?.scientificNameWithoutAuthor ?: "Unknown",
-                    commonNames = result.species?.commonNames ?: emptyList(),
-                    confidence = result.score ?: 0.0,
-                    externalIds = ExternalIds(
-                        plantNetId = result.species?.scientificNameWithoutAuthor,
-                        gbifId = result.gbif?.id?.toString(),
-                        powoId = result.powo?.id
-                    )
+        // 2️⃣ Convert PlantNet results → AISuggestion format
+        val plantNetSuggestions = plantNetResponse?.results?.map { result ->
+            AISuggestion(
+                suggestionId = "plantnet_${UUID.randomUUID()}",
+                source = "plantnet",
+                plantId = generatePlantId(result),
+                scientificName = result.species?.scientificNameWithoutAuthor ?: "Unknown",
+                commonNames = result.species?.commonNames ?: emptyList(),
+                confidence = result.score ?: 0.0,
+                externalIds = ExternalIds(
+                    plantNetId = result.species?.scientificNameWithoutAuthor,
+                    gbifId = result.gbif?.id?.toString(),
+                    powoId = result.powo?.id
                 )
-            } ?: emptyList()
-
-            // 3. Combine suggestions from both sources
-            val allSuggestions = (plantNetSuggestions + smartPlantAISuggestions)
-                .sortedByDescending { it.confidence }
-                .take(5) // Take top 5 combined suggestions
-
-            // 4. Determine primary source and initial status
-            val primarySource = if (smartPlantAISuggestions.isNotEmpty()) "hybrid" else "plantnet"
-            val topConfidence = allSuggestions.firstOrNull()?.confidence ?: 0.0
-            val initialStatus = if (topConfidence > 0.7) "ai_suggested" else "needs_review"
-
-            // 5. Create observation document
-            val observation = Observation(
-                observationId = observationId,
-                userId = currentUser.uid,
-                plantImageUrls = imageUrls,
-                geolocation = location,
-                userNote = userNote,
-                aiSuggestions = allSuggestions,
-                primarySource = primarySource,
-                currentIdentification = CurrentIdentification(
-                    plantId = allSuggestions.firstOrNull()?.plantId ?: "",
-                    scientificName = allSuggestions.firstOrNull()?.scientificName ?: "Unknown",
-                    confidence = topConfidence,
-                    identifiedBy = "ai",
-                    status = initialStatus
-                ),
-                timestamp = Timestamp.now()
             )
+        } ?: emptyList()
 
-            // 6. Save to Firestore
-            observationsCollection.document(observationId)
-                .set(observation)
-                .await()
+        // 3️⃣ Merge all suggestions
+        val allSuggestions = (plantNetSuggestions + smartPlantAISuggestions)
+            .sortedByDescending { it.confidence }
+            .take(5)
 
-            // 7. Update master plants catalog if new species
-            updatePlantsCatalog(allSuggestions)
+        val topSuggestion = allSuggestions.firstOrNull()
+        val topConfidence = topSuggestion?.confidence ?: 0.0
+        val primarySource = if (smartPlantAISuggestions.isNotEmpty()) "hybrid" else "plantnet"
+        val initialStatus = if (topConfidence > 0.7) "ai_suggested" else "needs_review"
 
-            // 8. If confidence is high, consider for training data
-            if (topConfidence > 0.8) {
-                addToTrainingDataIfConfident(observation, allSuggestions.first())
-            }
+        // 4️⃣ Create Observation
+        val observation = Observation(
+            observationId = observationId,
+            userId = currentUser.uid,
+            plantImageUrls = imageUrls,
+            geolocation = location,
+            userNote = userNote,
+            aiSuggestions = allSuggestions,
+            primarySource = primarySource,
+            currentIdentification = CurrentIdentification(
+                plantId = topSuggestion?.plantId ?: "",
+                scientificName = topSuggestion?.scientificName ?: "Unknown",
+                confidence = topConfidence,
+                identifiedBy = "ai",
+                status = initialStatus
+            ),
+            iucnCategory = iucnCategory,
+            timestamp = com.google.firebase.Timestamp.now()
+        )
 
-            // 9. Update user contribution stats
-            updateUserContributionStats(currentUser.uid, "observations")
+        // 5️⃣ Upload to Firestore
+        observationsCollection.document(observationId)
+            .set(observation)
+            .await()
 
-            kotlin.Result.success(observationId)
-        } catch (e: Exception) {
-            kotlin.Result.failure(e)
+        // 6️⃣ Update plants catalog
+        updatePlantsCatalog(allSuggestions)
+
+        // 7️⃣ Add to training data if confident
+        if (topConfidence > 0.8 && topSuggestion != null) {
+            addToTrainingDataIfConfident(observation, topSuggestion)
         }
+
+        // 8️⃣ Update user stats
+        updateUserContributionStats(currentUser.uid, "observations")
+
+        return observationId
     }
 
     private fun generatePlantId(result: Result): String {
-        // Generate a consistent plant ID from scientific name
         val scientificName = result.species?.scientificNameWithoutAuthor ?: "unknown"
-        // Remove special characters and spaces, convert to lowercase
-        return scientificName
-            .replace("[^A-Za-z0-9]".toRegex(), "_")
-            .lowercase()
+        return scientificName.replace("[^A-Za-z0-9]".toRegex(), "_").lowercase()
+    }
+
+    private suspend fun uploadImagesToStorage(observationId: String, imageUris: List<Uri>): List<String> {
+        val urls = mutableListOf<String>()
+        val storageRef = storage.reference.child("observations/${auth.currentUser?.uid}/$observationId")
+
+        for ((index, uri) in imageUris.withIndex()) {
+            val fileRef = storageRef.child("image_$index.jpg")
+            fileRef.putFile(uri).await()
+            urls.add(fileRef.downloadUrl.await().toString())
+        }
+        return urls
     }
 
     private suspend fun updatePlantsCatalog(suggestions: List<AISuggestion>) {
-        for (suggestion in suggestions.take(3)) { // Update top 3 suggestions
+        for (suggestion in suggestions.take(3)) {
             val plantData = mapOf(
                 "scientificName" to suggestion.scientificName,
                 "commonNames" to suggestion.commonNames,
@@ -133,148 +136,122 @@ class FirebaseRepository(private val context: Context) {
                 "lastSeen" to Timestamp.now(),
                 "suggestionCount" to com.google.firebase.firestore.FieldValue.increment(1)
             )
-
             plantsCollection.document(suggestion.plantId)
                 .set(plantData, SetOptions.merge())
                 .await()
         }
     }
 
-
     private suspend fun addToTrainingDataIfConfident(observation: Observation, topSuggestion: AISuggestion) {
-        if (topSuggestion.confidence > 0.8) {
+        val trainingData = TrainingData(
+            trainingId = UUID.randomUUID().toString(),
+            plantId = topSuggestion.plantId,
+            imageUrl = observation.plantImageUrls.first(),
+            sourceType = "ai_high_confidence",
+            sourceObservationId = observation.observationId,
+            verifiedBy = "ai_system",
+            verificationDate = Timestamp.now(),
+            verificationMethod = "auto_confidence",
+            confidenceScore = topSuggestion.confidence,
+            geolocation = observation.geolocation,
+            isActive = true,
+            sourceApi = topSuggestion.source
+        )
+        trainingDataCollection.document(trainingData.trainingId)
+            .set(trainingData, SetOptions.merge())
+            .await()
+    }
+
+    suspend fun flagObservation(observationId: String, reason: String): String {
+        val currentUser = auth.currentUser ?: throw Exception("User not authenticated")
+
+        val flagInfo = FlagInfo(
+            isFlagged = true,
+            flaggedBy = currentUser.uid,
+            flaggedAt = Timestamp.now(),
+            reason = reason
+        )
+
+        // Update the observation status
+        observationsCollection.document(observationId)
+            .update(
+                mapOf(
+                    "flagInfo" to flagInfo,
+                    "currentIdentification.status" to "flagged"
+                )
+            )
+            .await()
+
+        // Add to flag queue for admin review
+        flagQueueCollection.document(observationId)
+            .set(
+                mapOf(
+                    "observationId" to observationId,
+                    "flaggedBy" to currentUser.uid,
+                    "flaggedAt" to Timestamp.now(),
+                    "reason" to reason,
+                    "status" to "pending",
+                    "priority" to "medium"
+                ),
+                SetOptions.merge()
+            )
+            .await()
+
+        // Update user stats
+        updateUserContributionStats(currentUser.uid, "flagsSubmitted")
+
+        return "Flag submitted for observation $observationId"
+    }
+
+
+    suspend fun confirmObservation(observationId: String, plantId: String, scientificName: String): String {
+        val currentUser = auth.currentUser ?: throw Exception("User not authenticated")
+
+        // Update Firestore observation
+        observationsCollection.document(observationId)
+            .update(
+                mapOf(
+                    "currentIdentification.plantId" to plantId,
+                    "currentIdentification.scientificName" to scientificName,
+                    "currentIdentification.identifiedBy" to "user_confirmed",
+                    "currentIdentification.status" to "user_verified",
+                    "flagInfo" to null
+                )
+            )
+            .await()
+
+        // Retrieve observation
+        val observation = observationsCollection.document(observationId)
+            .get()
+            .await()
+            .toObject(Observation::class.java)
+
+        // Add to training data if available
+        if (observation != null) {
             val trainingData = TrainingData(
                 trainingId = UUID.randomUUID().toString(),
-                plantId = topSuggestion.plantId,
+                plantId = plantId,
                 imageUrl = observation.plantImageUrls.first(),
-                sourceType = "ai_high_confidence",
-                sourceObservationId = observation.observationId,
-                verifiedBy = "ai_system",
+                sourceType = "user_verified",
+                sourceObservationId = observationId,
+                verifiedBy = currentUser.uid,
                 verificationDate = Timestamp.now(),
-                verificationMethod = "auto_confidence",
-                confidenceScore = topSuggestion.confidence,
+                verificationMethod = "user_confirmation",
+                confidenceScore = 1.0,
                 geolocation = observation.geolocation,
                 isActive = true,
-                sourceApi = topSuggestion.source // Track which API provided this suggestion
+                sourceApi = "user_verified"
             )
 
             trainingDataCollection.document(trainingData.trainingId)
                 .set(trainingData, SetOptions.merge())
                 .await()
         }
-    }
 
-    // Other methods remain similar but updated for the new structure...
-    private suspend fun uploadImagesToStorage(observationId: String, imageUris: List<Uri>): List<String> {
-        val imageUrls = mutableListOf<String>()
-        val storageRef = storage.reference.child("observations/${auth.currentUser?.uid}/$observationId")
+        // Update user contribution stats
+        updateUserContributionStats(currentUser.uid, "verifiedIdentifications")
 
-        for ((index, uri) in imageUris.withIndex()) {
-            val fileRef = storageRef.child("image_$index.jpg")
-            fileRef.putFile(uri).await()
-            val downloadUrl = fileRef.downloadUrl.await()
-            imageUrls.add(downloadUrl.toString())
-        }
-
-        return imageUrls
-    }
-
-    suspend fun flagObservation(observationId: String, reason: String): kotlin.Result<Unit> {
-        // Implementation remains similar...
-        return try {
-            val currentUser = auth.currentUser
-            if (currentUser == null) {
-                return kotlin.Result.failure(Exception("User not authenticated"))
-            }
-
-            val flagInfo = FlagInfo(
-                isFlagged = true,
-                flaggedBy = currentUser.uid,
-                flaggedAt = Timestamp.now(),
-                reason = reason
-            )
-
-            observationsCollection.document(observationId)
-                .update(
-                    mapOf(
-                        "flagInfo" to flagInfo,
-                        "currentIdentification.status" to "flagged"
-                    )
-                )
-                .await()
-
-            val flagQueueItem = mapOf(
-                "observationId" to observationId,
-                "flaggedBy" to currentUser.uid,
-                "flaggedAt" to Timestamp.now(),
-                "reason" to reason,
-                "status" to "pending",
-                "priority" to "medium"
-            )
-
-            flagQueueCollection.document(observationId)
-                .set(flagQueueItem, SetOptions.merge())
-                .await()
-
-            updateUserContributionStats(currentUser.uid, "flagsSubmitted")
-
-            kotlin.Result.success(Unit)
-        } catch (e: Exception) {
-            kotlin.Result.failure(e)
-        }
-    }
-
-    suspend fun confirmObservation(observationId: String, plantId: String, scientificName: String): kotlin.Result<Unit> {
-        return try {
-            val currentUser = auth.currentUser
-            if (currentUser == null) {
-                return kotlin.Result.failure(Exception("User not authenticated"))
-            }
-
-            // Update observation as verified
-            observationsCollection.document(observationId)
-                .update(
-                    mapOf(
-                        "currentIdentification.plantId" to plantId,
-                        "currentIdentification.scientificName" to scientificName,
-                        "currentIdentification.identifiedBy" to "user_confirmed",
-                        "currentIdentification.status" to "user_verified",
-                        "flagInfo" to null
-                    )
-                )
-                .await()
-
-            // Add to training data for AI retraining
-            val observation = observationsCollection.document(observationId).get().await()
-                .toObject(Observation::class.java)
-
-            if (observation != null) {
-                val trainingData = TrainingData(
-                    trainingId = UUID.randomUUID().toString(),
-                    plantId = plantId,
-                    imageUrl = observation.plantImageUrls.first(),
-                    sourceType = "user_verified",
-                    sourceObservationId = observationId,
-                    verifiedBy = currentUser.uid,
-                    verificationDate = Timestamp.now(),
-                    verificationMethod = "user_confirmation",
-                    confidenceScore = 1.0,
-                    geolocation = observation.geolocation,
-                    isActive = true,
-                    sourceApi = "user_verified" // Mark as user-verified for highest quality
-                )
-
-                trainingDataCollection.document(trainingData.trainingId)
-                    .set(trainingData, SetOptions.merge())
-                    .await()
-            }
-
-            updateUserContributionStats(currentUser.uid, "verifiedIdentifications")
-
-            kotlin.Result.success(Unit)
-        } catch (e: Exception) {
-            kotlin.Result.failure(e)
-        }
+        return "Observation $observationId confirmed successfully"
     }
 
     private suspend fun updateUserContributionStats(userId: String, field: String) {

@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Looper
 import android.provider.OpenableColumns
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -52,6 +53,8 @@ class HomeFragment : Fragment() {
 
     private var currentObservationId: String? = null
     private var currentAiSuggestions: List<AISuggestion> = emptyList()
+
+    private var latestIucnCategory: String? = null
 
     // Permission request
     private val locationPermissionRequest = registerForActivityResult(
@@ -122,16 +125,40 @@ class HomeFragment : Fragment() {
 
         firebaseRepository = FirebaseRepository(requireContext())
 
-        // Observe PlantNet API results
         viewModel.result.observe(viewLifecycleOwner) { response ->
             showResults(response)
-            lifecycleScope.launch {
-                uploadObservationToFirebase(response)
+
+            val topSpecies = response?.results?.firstOrNull()?.species?.scientificNameWithoutAuthor
+            if (!topSpecies.isNullOrBlank()) {
+                Log.d("HomeFragment23", "Top species name: $topSpecies")
+                viewModel.fetchIucnStatus(topSpecies)
             }
         }
 
         viewModel.error.observe(viewLifecycleOwner) {
             binding.textHome.text = "Error: $it"
+        }
+
+
+        viewModel.iucnStatus.observe(viewLifecycleOwner) { category ->
+            latestIucnCategory = category
+
+            if (category != null) {
+                binding.textHome.append("\n🦎 IUCN Red List: $category")
+
+                // ✅ Only upload once the category is ready
+                lifecycleScope.launch {
+                    uploadObservationToFirebase(viewModel.result.value, iucnCategory = category)
+                }
+
+            } else {
+                binding.textHome.append("\n🦎 IUCN Red List: Not available")
+
+                // Still upload, but with null category
+                lifecycleScope.launch {
+                    uploadObservationToFirebase(viewModel.result.value, iucnCategory = null)
+                }
+            }
         }
 
         setupUI()
@@ -178,7 +205,6 @@ class HomeFragment : Fragment() {
             }
         }
 
-        // Correct button
         binding.buttonCorrect.setOnClickListener {
             if (!isUserAuthenticated()) {
                 Toast.makeText(requireContext(), "Please log in to confirm identifications", Toast.LENGTH_LONG).show()
@@ -189,15 +215,16 @@ class HomeFragment : Fragment() {
                 val topSuggestion = currentAiSuggestions.firstOrNull()
                 if (topSuggestion != null) {
                     lifecycleScope.launch {
-                        firebaseRepository.confirmObservation(
-                            observationId = observationId,
-                            plantId = topSuggestion.plantId,
-                            scientificName = topSuggestion.scientificName
-                        ).onSuccess {
+                        try {
+                            firebaseRepository.confirmObservation(
+                                observationId = observationId,
+                                plantId = topSuggestion.plantId,
+                                scientificName = topSuggestion.scientificName
+                            )
                             Toast.makeText(requireContext(), "Thanks for confirming! Added to training data.", Toast.LENGTH_SHORT).show()
                             resetUI()
-                        }.onFailure { exception ->
-                            Toast.makeText(requireContext(), "Confirmation failed: ${exception.message}", Toast.LENGTH_SHORT).show()
+                        } catch (e: Exception) {
+                            Toast.makeText(requireContext(), "Confirmation failed: ${e.message}", Toast.LENGTH_SHORT).show()
                         }
                     }
                 } else {
@@ -206,7 +233,9 @@ class HomeFragment : Fragment() {
             } ?: Toast.makeText(requireContext(), "No observation to confirm", Toast.LENGTH_SHORT).show()
         }
 
+
         // Wrong button
+        // ✅ Wrong button
         binding.buttonWrong.setOnClickListener {
             if (!isUserAuthenticated()) {
                 Toast.makeText(requireContext(), "Please log in to flag identifications", Toast.LENGTH_LONG).show()
@@ -215,19 +244,21 @@ class HomeFragment : Fragment() {
 
             currentObservationId?.let { observationId ->
                 lifecycleScope.launch {
-                    firebaseRepository.flagObservation(
-                        observationId = observationId,
-                        reason = "unsure"
-                    ).onSuccess {
+                    try {
+                        firebaseRepository.flagObservation(
+                            observationId = observationId,
+                            reason = "unsure"
+                        )
                         Toast.makeText(requireContext(), "Image sent to experts for review.", Toast.LENGTH_LONG).show()
                         resetUI()
-                    }.onFailure { exception ->
-                        Toast.makeText(requireContext(), "Flagging failed: ${exception.message}", Toast.LENGTH_SHORT).show()
+                    } catch (e: Exception) {
+                        Toast.makeText(requireContext(), "Flagging failed: ${e.message}", Toast.LENGTH_SHORT).show()
                     }
                 }
             } ?: Toast.makeText(requireContext(), "No observation to flag", Toast.LENGTH_SHORT).show()
         }
     }
+
 
     private fun isUserAuthenticated(): Boolean {
         return auth.currentUser != null && !auth.currentUser!!.isAnonymous
@@ -306,7 +337,10 @@ class HomeFragment : Fragment() {
         )
     }
 
-    private suspend fun uploadObservationToFirebase(response: PlantNetResponse?) {
+    private suspend fun uploadObservationToFirebase(
+        response: PlantNetResponse?,
+        iucnCategory: String? = null
+    ) {
         // Double-check authentication before upload
         if (!isUserAuthenticated()) {
             Toast.makeText(requireContext(), "Please log in to upload observations", Toast.LENGTH_LONG).show()
@@ -319,14 +353,18 @@ class HomeFragment : Fragment() {
 
         val smartPlantAISuggestions = emptyList<AISuggestion>() // future AI
 
-        firebaseRepository.uploadPlantObservation(
-            plantNetResponse = response,
-            smartPlantAISuggestions = smartPlantAISuggestions,
-            imageUris = selectedImageUris,
-            userNote = "User submitted plant for identification",
-            location = geoLocation
-        ).onSuccess { id ->
+        try {
+            val id = firebaseRepository.uploadPlantObservation(
+                plantNetResponse = response,
+                smartPlantAISuggestions = smartPlantAISuggestions,
+                imageUris = selectedImageUris,
+                userNote = "User submitted plant for identification",
+                location = geoLocation,
+                iucnCategory = iucnCategory
+            )
+
             currentObservationId = id
+
             currentAiSuggestions = response?.results?.mapIndexed { index, plantNetResult ->
                 AISuggestion(
                     suggestionId = "plantnet_$index",
@@ -342,10 +380,13 @@ class HomeFragment : Fragment() {
                     )
                 )
             } ?: emptyList()
-        }.onFailure { exception ->
-            Toast.makeText(requireContext(), "Upload failed: ${exception.message}", Toast.LENGTH_SHORT).show()
+
+        } catch (e: Exception) {
+            Toast.makeText(requireContext(), "Upload failed: ${e.message}", Toast.LENGTH_SHORT).show()
         }
+
     }
+
 
     private fun generatePlantId(result: Result): String {
         val scientificName = result.species?.scientificNameWithoutAuthor ?: "unknown"
