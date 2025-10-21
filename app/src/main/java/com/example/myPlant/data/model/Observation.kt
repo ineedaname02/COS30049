@@ -20,14 +20,17 @@ data class Observation(
     // Flagging System
     val flagInfo: FlagInfo? = null,
 
+    // 🆕 IUCN Category (e.g., "Endangered", "Vulnerable", etc.)
+    val iucnCategory: String? = null,
+
     // Metadata
     @ServerTimestamp
     val timestamp: Timestamp? = null,
     val version: Int = 1
 )
 
-// Other data classes remain the same...
 data class GeoLocation(val lat: Double = 0.0, val lng: Double = 0.0)
+
 data class CurrentIdentification(
     val plantId: String = "",
     val scientificName: String = "",
@@ -35,6 +38,7 @@ data class CurrentIdentification(
     val identifiedBy: String = "ai", // 'ai', 'admin', 'community'
     val status: String = "ai_suggested"
 )
+
 data class FlagInfo(
     val isFlagged: Boolean = false,
     val flaggedBy: String = "",

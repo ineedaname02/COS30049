@@ -32,4 +32,14 @@ class PlantViewModel(private val repository: PlantRepository) : ViewModel() {
             }
         }
     }
+
+    private val _iucnStatus = MutableLiveData<String?>()
+    val iucnStatus: LiveData<String?> = _iucnStatus
+
+    fun fetchIucnStatus(scientificName: String) {
+        viewModelScope.launch {
+            val status = repository.getIucnStatus(scientificName)
+            _iucnStatus.value = status
+        }
+    }
 }
