@@ -329,7 +329,7 @@ class HomeFragment : Fragment() {
                     fusedLocationClient.removeLocationUpdates(this)
 
                     currentLocation?.let { location ->
-                        binding.textHome.append("\n📍 Location: ${"%.6f".format(location.latitude)}, ${"%.6f".format(location.longitude)}")
+                        binding.textHome.append("\n Location: ${"%.6f".format(location.latitude)}, ${"%.6f".format(location.longitude)}")
                     }
                 }
             },

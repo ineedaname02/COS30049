@@ -3,7 +3,6 @@ package com.example.myPlant
 import android.content.Intent
 import android.os.Bundle
 import android.view.Menu
-import android.widget.Button
 import com.google.android.material.snackbar.Snackbar
 import com.google.android.material.navigation.NavigationView
 import androidx.navigation.findNavController
@@ -16,7 +15,6 @@ import androidx.appcompat.app.AppCompatActivity
 import com.example.myPlant.databinding.ActivityMainBinding
 import com.google.firebase.auth.FirebaseAuth
 import com.example.myPlant.ui.admin.AdminDashboardActivity
-import com.example.myPlant.ui.IotDashboardActivity
 
 class MainActivity : AppCompatActivity() {
 
@@ -50,15 +48,20 @@ class MainActivity : AppCompatActivity() {
         val navView: NavigationView = binding.navView
         val navController = findNavController(R.id.nav_host_fragment_content_main)
 
+        // ✅ INCLUDE nav_history in top-level destinations so nav drawer works correctly
         appBarConfiguration = AppBarConfiguration(
             setOf(
-                R.id.nav_home, R.id.nav_gallery, R.id.nav_slideshow
+                R.id.nav_home,
+                R.id.nav_gallery,
+                R.id.nav_slideshow,
+                R.id.nav_history  // ✅ add this line
             ), drawerLayout
         )
+
         setupActionBarWithNavController(navController, appBarConfiguration)
         navView.setupWithNavController(navController)
 
-        // 👇 Safely show admin group if user is admin
+        // Show admin menu group if user is admin
         val navMenu = navView.menu
         val isAdmin = intent.getBooleanExtra("isAdmin", false)
         navMenu.setGroupVisible(R.id.admin_group, isAdmin)
