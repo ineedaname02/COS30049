@@ -15,7 +15,6 @@ import androidx.drawerlayout.widget.DrawerLayout
 import androidx.appcompat.app.AppCompatActivity
 import com.example.myPlant.databinding.ActivityMainBinding
 import com.google.firebase.auth.FirebaseAuth
-import com.example.myPlant.ui.admin.AdminDashboardActivity
 import com.example.myPlant.ui.IotDashboardActivity
 import com.example.myPlant.data.local.UserPreferences
 
@@ -54,7 +53,7 @@ class MainActivity : AppCompatActivity() {
 
         appBarConfiguration = AppBarConfiguration(
             setOf(
-                R.id.nav_home, R.id.nav_gallery, R.id.nav_slideshow
+                R.id.nav_home, R.id.nav_gallery, R.id.nav_slideshow, R.id.nav_admin_dashboard
             ), drawerLayout
         )
         setupActionBarWithNavController(navController, appBarConfiguration)
@@ -69,12 +68,6 @@ class MainActivity : AppCompatActivity() {
 
         navView.setNavigationItemSelectedListener { menuItem ->
             when (menuItem.itemId) {
-                R.id.nav_admin_dashboard -> {
-                    // Open Admin Dashboard Activity
-                    startActivity(Intent(this, AdminDashboardActivity::class.java))
-                    true
-                }
-
                 R.id.nav_logout -> {
                     FirebaseAuth.getInstance().signOut()
                     val userPrefs = UserPreferences(this)
@@ -83,9 +76,8 @@ class MainActivity : AppCompatActivity() {
                     finish()
                     true
                 }
-
-
                 else -> {
+                    // Let NavigationUI handle all other items including admin dashboard
                     val handled = androidx.navigation.ui.NavigationUI.onNavDestinationSelected(
                         menuItem, navController
                     )
