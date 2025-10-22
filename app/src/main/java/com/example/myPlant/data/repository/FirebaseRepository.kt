@@ -10,6 +10,8 @@ import com.google.firebase.storage.FirebaseStorage
 import com.google.firebase.Timestamp
 import kotlinx.coroutines.tasks.await
 import java.util.UUID
+import com.google.firebase.firestore.Query
+import kotlinx.coroutines.tasks.await
 
 class FirebaseRepository(private val context: Context) {
 
@@ -263,4 +265,36 @@ class FirebaseRepository(private val context: Context) {
             println("Failed to update user stats: ${e.message}")
         }
     }
+
+    suspend fun getUserObservations(userId: String): List<PlantObservation> {
+        val collection = FirebaseFirestore.getInstance().collection("observations")
+        val query = collection.whereEqualTo("userId", userId)
+
+        val snapshot = try {
+            query.orderBy("timestamp", Query.Direction.DESCENDING).get().await()
+        } catch (e: Exception) {
+            // Fallback if index not built yet
+            query.get().await()
+        }
+
+        return snapshot.documents.mapNotNull { doc ->
+            val data = doc.data ?: return@mapNotNull null
+
+            val currentId = data["currentIdentification"] as? Map<*, *>
+            val name = currentId?.get("scientificName") as? String ?: "Unknown"
+            val confidence = (currentId?.get("confidence") as? Number)?.toDouble() ?: 0.0
+            val images = (data["plantImageUrls"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
+            val category = data["iucnCategory"] as? String
+
+            PlantObservation(
+                id = doc.id,
+                scientificName = name,
+                confidence = confidence,
+                iucnCategory = category,
+                imageUrls = images
+            )
+        }
+    }
+
+
 }

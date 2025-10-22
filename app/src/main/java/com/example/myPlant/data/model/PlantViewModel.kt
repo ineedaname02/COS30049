@@ -5,6 +5,7 @@ import androidx.lifecycle.*
 import com.example.myPlant.data.repository.PlantRepository
 import kotlinx.coroutines.launch
 import okhttp3.MultipartBody
+import android.net.Uri
 
 class PlantViewModel(private val repository: PlantRepository) : ViewModel() {
 
@@ -13,6 +14,8 @@ class PlantViewModel(private val repository: PlantRepository) : ViewModel() {
 
     private val _error = MutableLiveData<String?>()
     val error: LiveData<String?> = _error
+
+    var lastImageUris: List<Uri> = emptyList()
 
     fun identifyPlant(
         images: List<MultipartBody.Part>,

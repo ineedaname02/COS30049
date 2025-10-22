@@ -1,8 +1,11 @@
 package com.example.myPlant
 
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
+import android.provider.MediaStore
 import android.view.Menu
+import android.widget.Toast
 import com.google.android.material.snackbar.Snackbar
 import com.google.android.material.navigation.NavigationView
 import androidx.navigation.findNavController
@@ -15,11 +18,45 @@ import androidx.appcompat.app.AppCompatActivity
 import com.example.myPlant.databinding.ActivityMainBinding
 import com.google.firebase.auth.FirebaseAuth
 import com.example.myPlant.ui.admin.AdminDashboardActivity
+import com.example.myPlant.ui.home.HomeFragment
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var appBarConfiguration: AppBarConfiguration
     private lateinit var binding: ActivityMainBinding
+
+    private fun checkCameraPermissionAndLaunch() {
+        val cameraPermission = android.Manifest.permission.CAMERA
+
+        if (checkSelfPermission(cameraPermission) == PackageManager.PERMISSION_GRANTED) {
+            openCamera()
+        } else {
+            requestPermissions(arrayOf(cameraPermission), 1001)
+        }
+    }
+
+    private fun openCamera() {
+        val cameraIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
+        if (cameraIntent.resolveActivity(packageManager) != null) {
+            startActivity(cameraIntent)
+        } else {
+            Toast.makeText(this, "No camera app found", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+
+        if (requestCode == 1001 && grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            openCamera()
+        } else {
+            Toast.makeText(this, "Camera permission denied", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -47,6 +84,21 @@ class MainActivity : AppCompatActivity() {
         val drawerLayout: DrawerLayout = binding.drawerLayout
         val navView: NavigationView = binding.navView
         val navController = findNavController(R.id.nav_host_fragment_content_main)
+
+        navController.addOnDestinationChangedListener { _, destination, _ ->
+            if (destination.id == R.id.nav_home) {
+                binding.appBarMain.fab.show()
+
+                binding.appBarMain.fab.setOnClickListener {
+                    val navHostFragment = supportFragmentManager.findFragmentById(R.id.nav_host_fragment_content_main)
+                    val homeFragment = navHostFragment?.childFragmentManager?.fragments
+                        ?.firstOrNull { it is HomeFragment } as? HomeFragment
+                    homeFragment?.launchCamera()
+                }
+            } else {
+                binding.appBarMain.fab.hide()
+            }
+        }
 
         // ✅ INCLUDE nav_history in top-level destinations so nav drawer works correctly
         appBarConfiguration = AppBarConfiguration(

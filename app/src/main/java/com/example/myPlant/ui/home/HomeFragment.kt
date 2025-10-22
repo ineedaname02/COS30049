@@ -15,6 +15,7 @@ import android.view.ViewGroup
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.app.ActivityCompat
+import androidx.core.content.FileProvider
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -54,7 +55,11 @@ class HomeFragment : Fragment() {
     private var currentObservationId: String? = null
     private var currentAiSuggestions: List<AISuggestion> = emptyList()
 
+    //Send Button
     private var latestIucnCategory: String? = null
+    private var lastClickTime = 0L
+    private val debounceInterval = 1000L
+    private var hasUploadedOnce = false
 
     // Permission request
     private val locationPermissionRequest = registerForActivityResult(
@@ -77,14 +82,13 @@ class HomeFragment : Fragment() {
         ActivityResultContracts.GetMultipleContents()
     ) { uris: List<Uri> ->
         if (uris.isNotEmpty()) {
-            // Check auth before allowing image selection
             if (!isUserAuthenticated()) {
                 Toast.makeText(requireContext(), "Please log in to upload images", Toast.LENGTH_LONG).show()
                 return@registerForActivityResult
             }
 
             selectedImageUris.clear()
-            selectedImageUris.addAll(uris.take(5)) // limit to 5
+            selectedImageUris.addAll(uris.take(5))
 
             adapter = SelectedImagesAdapter(selectedImageUris)
             binding.imageRecyclerView.adapter = adapter
@@ -92,11 +96,77 @@ class HomeFragment : Fragment() {
                 LinearLayoutManager(requireContext(), LinearLayoutManager.HORIZONTAL, false)
 
             binding.textHome.text = "Selected ${selectedImageUris.size} image(s)"
-
-            // Request location when images are selected
             requestLocationPermission()
         }
     }
+
+    private var cameraImageUri: Uri? = null
+
+
+    private val takePhotoLauncher = registerForActivityResult(
+        ActivityResultContracts.TakePicture()
+    ) { success: Boolean ->
+        if (success && cameraImageUri != null) {
+            // Check auth again
+            if (!isUserAuthenticated()) {
+                Toast.makeText(requireContext(), "Please log in to upload images", Toast.LENGTH_LONG).show()
+                return@registerForActivityResult
+            }
+
+            // Add captured image to list (append or replace as you prefer)
+            // Here we append to the list; if you want only one image, use clear() first
+            selectedImageUris.add(0, cameraImageUri!!) // add to front
+            // Limit to 5 images
+            if (selectedImageUris.size > 5) {
+                // drop extras from the end
+                while (selectedImageUris.size > 5) selectedImageUris.removeAt(selectedImageUris.lastIndex)
+            }
+
+            // Update adapter / UI
+            adapter = SelectedImagesAdapter(selectedImageUris)
+            binding.imageRecyclerView.adapter = adapter
+            binding.imageRecyclerView.layoutManager =
+                LinearLayoutManager(requireContext(), LinearLayoutManager.HORIZONTAL, false)
+
+            binding.textHome.text = "Selected ${selectedImageUris.size} image(s)"
+
+            // Request location now that we have an image
+            requestLocationPermission()
+
+            // Optional: automatically kick off identification/upload
+            // lifecycleScope.launch { doAutoIdentifyOrUpload() }
+        } else {
+            Toast.makeText(requireContext(), "Photo capture cancelled or failed", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+
+    fun launchCamera() {
+        try {
+            // Create a temporary file in cache dir
+            val photoFile = File.createTempFile(
+                "plant_photo_${System.currentTimeMillis()}_",
+                ".jpg",
+                requireContext().cacheDir
+            ).apply {
+                // optional: deleteOnExit won't work reliably on Android; manage cleanup if desired
+            }
+
+            // Generate a content:// Uri via FileProvider
+            cameraImageUri = FileProvider.getUriForFile(
+                requireContext(),
+                "${requireContext().packageName}.provider",
+                photoFile
+            )
+
+            // Launch camera app to save image to that Uri
+            takePhotoLauncher.launch(cameraImageUri)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Toast.makeText(requireContext(), "Unable to open camera: ${e.message}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -126,11 +196,10 @@ class HomeFragment : Fragment() {
         firebaseRepository = FirebaseRepository(requireContext())
 
         viewModel.result.observe(viewLifecycleOwner) { response ->
-            showResults(response)
+            showResults(response, latestIucnCategory) // pass the category if available
 
             val topSpecies = response?.results?.firstOrNull()?.species?.scientificNameWithoutAuthor
             if (!topSpecies.isNullOrBlank()) {
-                Log.d("HomeFragment23", "Top species name: $topSpecies")
                 viewModel.fetchIucnStatus(topSpecies)
             }
         }
@@ -139,27 +208,27 @@ class HomeFragment : Fragment() {
             binding.textHome.text = "Error: $it"
         }
 
+        if (viewModel.lastImageUris.isNotEmpty()) {
+            val adapter = ImagePreviewAdapter(viewModel.lastImageUris)
+            binding.imageRecyclerView.layoutManager =
+                LinearLayoutManager(requireContext(), LinearLayoutManager.HORIZONTAL, false)
+            binding.imageRecyclerView.adapter = adapter
+        }
 
         viewModel.iucnStatus.observe(viewLifecycleOwner) { category ->
             latestIucnCategory = category
 
-            if (category != null) {
-                binding.textHome.append("\n🦎 IUCN Red List: $category")
+            // Rebuild full result view including the new IUCN info
+            showResults(viewModel.result.value, latestIucnCategory)
 
-                // ✅ Only upload once the category is ready
+            if (!hasUploadedOnce && viewModel.result.value != null) {
+                hasUploadedOnce = true
                 lifecycleScope.launch {
-                    uploadObservationToFirebase(viewModel.result.value, iucnCategory = category)
-                }
-
-            } else {
-                binding.textHome.append("\n🦎 IUCN Red List: Not available")
-
-                // Still upload, but with null category
-                lifecycleScope.launch {
-                    uploadObservationToFirebase(viewModel.result.value, iucnCategory = null)
+                    uploadObservationToFirebase(viewModel.result.value, category)
                 }
             }
         }
+
 
         setupUI()
         return root
@@ -185,24 +254,39 @@ class HomeFragment : Fragment() {
 
         // Send button
         binding.buttonSend.setOnClickListener {
+            val currentTime = System.currentTimeMillis()
+            if (currentTime - lastClickTime < debounceInterval) {
+                return@setOnClickListener // Ignore click if within debounce interval
+            }
+            lastClickTime = currentTime
+
             if (!isUserAuthenticated()) {
                 Toast.makeText(requireContext(), "Please log in to identify plants", Toast.LENGTH_LONG).show()
                 return@setOnClickListener
             }
 
+            binding.imageRecyclerView.layoutManager =
+                LinearLayoutManager(requireContext(), LinearLayoutManager.HORIZONTAL, false)
+
             if (selectedImageUris.isNotEmpty()) {
+                // Set up adapter
+                val adapter = ImagePreviewAdapter(selectedImageUris)
+                binding.imageRecyclerView.adapter = adapter
+
+                // Store in ViewModel for restoration
+                viewModel.lastImageUris = selectedImageUris
+
                 val imageParts = selectedImageUris.map { uri -> prepareImagePart(uri) }
                 val organParts = List(imageParts.size) {
                     MultipartBody.Part.createFormData("organs", "leaf")
                 }
-                viewModel.identifyPlant(
-                    images = imageParts,
-                    organs = organParts,
-                    project = "all"
-                )
+
+                viewModel.identifyPlant(images = imageParts, organs = organParts, project = "all")
+                hasUploadedOnce = false
             } else {
                 binding.textHome.text = "Please upload at least one image first."
             }
+
         }
 
         binding.buttonCorrect.setOnClickListener {
@@ -393,7 +477,7 @@ class HomeFragment : Fragment() {
         return scientificName.replace("[^A-Za-z0-9]".toRegex(), "_").lowercase()
     }
 
-    private fun showResults(response: PlantNetResponse?) {
+    private fun showResults(response: PlantNetResponse?, iucnCategory: String? = null) {
         val results = response?.results
         if (results.isNullOrEmpty()) {
             binding.textHome.text = "No results found"
@@ -414,7 +498,11 @@ class HomeFragment : Fragment() {
             sb.append("\n📍 Location: ${"%.6f".format(location.latitude)}, ${"%.6f".format(location.longitude)}\n")
         }
 
-        sb.append("\nPlease confirm if the identification is correct or flag for expert review.")
+        if (iucnCategory != null) {
+            sb.append("\n🦎 IUCN Red List: $iucnCategory")
+        }
+
+        sb.append("\n\nPlease confirm if the identification is correct or flag for expert review.")
         binding.textHome.text = sb.toString().trim()
     }
 

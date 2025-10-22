@@ -3,6 +3,7 @@ import java.util.Properties
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
+    id("kotlin-kapt")
 
     id("com.google.gms.google-services")
     alias(libs.plugins.kotlin.compose) // ✅ Apply Firebase plugin here
@@ -89,6 +90,8 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
 
+
+
     // Import the Firebase BoM
     implementation(platform("com.google.firebase:firebase-bom:32.7.0"))
 
@@ -104,6 +107,9 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+    implementation("com.github.bumptech.glide:glide:4.16.0")
+
+
 
     implementation("com.google.firebase:firebase-database:20.3.0")
 

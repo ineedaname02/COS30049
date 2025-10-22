@@ -29,7 +29,8 @@
         android:layout_gravity="bottom|end"
         android:layout_marginEnd="@dimen/fab_margin"
         android:layout_marginBottom="16dp"
-        app:srcCompat="@android:drawable/ic_dialog_email" />
+        app:maxImageSize="30dp"
+        app:srcCompat="@android:drawable/ic_menu_camera" />
 
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

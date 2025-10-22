@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Allow files in cache dir -->
+    <cache-path name="cache" path="." />
+
+    <!-- Optionally allow files in files/ -->
+    <files-path name="files" path="." />
+
+    <!-- Optionally allow external files (app-specific) -->
+    <!-- <external-files-path name="external_files" path="." /> -->
+</paths>
