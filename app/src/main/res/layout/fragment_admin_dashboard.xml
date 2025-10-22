@@ -31,10 +31,10 @@
         android:layout_marginTop="32dp" />
 
     <Button
-        android:id="@+id/viewReportsButton"
+        android:id="@+id/plantVerificationButton"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:text="View Reports"
+        android:text="Plant Verification"
         app:layout_constraintTop_toBottomOf="@id/viewUsersButton"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
@@ -45,7 +45,7 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:text="Manage Plants"
-        app:layout_constraintTop_toBottomOf="@id/viewReportsButton"
+        app:layout_constraintTop_toBottomOf="@+id/plantVerificationButton"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         android:layout_marginTop="16dp" />

@@ -9,6 +9,8 @@ import android.widget.Button
 import androidx.fragment.app.Fragment
 import com.example.myPlant.R
 import com.example.myPlant.ui.IotDashboardActivity
+import androidx.navigation.fragment.findNavController
+
 
 class AdminDashboardFragment : Fragment() {
 
@@ -22,6 +24,11 @@ class AdminDashboardFragment : Fragment() {
         iotButton.setOnClickListener {
             val intent = Intent(requireContext(), IotDashboardActivity::class.java)
             startActivity(intent)
+        }
+
+        val plantVerificationButton = view.findViewById<Button>(R.id.plantVerificationButton)
+        plantVerificationButton.setOnClickListener {
+            findNavController().navigate(R.id.nav_plant_verification)
         }
 
         return view
