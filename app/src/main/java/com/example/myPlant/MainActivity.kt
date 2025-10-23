@@ -127,6 +127,25 @@ class MainActivity : AppCompatActivity() {
         navView.setupWithNavController(navController)
 
         // ---------------------------
+        // USER EMAIL DISPLAY IN SIDEBAR
+        // ---------------------------
+        val headerView = navView.getHeaderView(0)
+        val userEmailTextView = headerView.findViewById<android.widget.TextView>(R.id.nav_header_user_email)
+        val userNameTextView = headerView.findViewById<android.widget.TextView>(R.id.nav_header_user_name)
+        
+        // Set user email from Firebase Auth
+        currentUser?.email?.let { email ->
+            userEmailTextView?.text = email
+        }
+        
+        // Set user name (you can customize this based on your user data)
+        currentUser?.displayName?.let { displayName ->
+            userNameTextView?.text = "Welcome, $displayName"
+        } ?: run {
+            userNameTextView?.text = "Welcome Back"
+        }
+
+        // ---------------------------
         // ADMIN MENU VISIBILITY
         // ---------------------------
         val navMenu = navView.menu

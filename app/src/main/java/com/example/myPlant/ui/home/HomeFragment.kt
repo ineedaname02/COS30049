@@ -206,6 +206,23 @@ class HomeFragment : Fragment() {
 
         viewModel.error.observe(viewLifecycleOwner) {
             binding.textHome.text = "Error: $it"
+            hideLoadingIndicator()
+        }
+
+        // Loading state observer
+        viewModel.isLoading.observe(viewLifecycleOwner) { isLoading ->
+            if (isLoading) {
+                showLoadingIndicator()
+            } else {
+                hideLoadingIndicator()
+            }
+        }
+
+        // Loading message observer
+        viewModel.loadingMessage.observe(viewLifecycleOwner) { message ->
+            if (message.isNotEmpty()) {
+                binding.loadingMessage.text = message
+            }
         }
 
         if (viewModel.lastImageUris.isNotEmpty()) {
@@ -431,6 +448,12 @@ class HomeFragment : Fragment() {
             return
         }
 
+        // Show upload loading indicator
+        requireActivity().runOnUiThread {
+            binding.loadingMessage.text = "Uploading to database..."
+            binding.loadingContainer.visibility = View.VISIBLE
+        }
+
         val geoLocation = currentLocation?.let {
             GeoLocation(it.latitude, it.longitude)
         }
@@ -467,6 +490,11 @@ class HomeFragment : Fragment() {
 
         } catch (e: Exception) {
             Toast.makeText(requireContext(), "Upload failed: ${e.message}", Toast.LENGTH_SHORT).show()
+        } finally {
+            // Hide loading indicator
+            requireActivity().runOnUiThread {
+                binding.loadingContainer.visibility = View.GONE
+            }
         }
 
     }
@@ -539,6 +567,23 @@ class HomeFragment : Fragment() {
         binding.imageRecyclerView.adapter = null
         binding.imageRecyclerView.layoutManager = null
         binding.textHome.text = "Upload plant images for identification"
+    }
+
+    // ---------------------------
+    // LOADING INDICATOR METHODS
+    // ---------------------------
+    private fun showLoadingIndicator() {
+        binding.loadingContainer.visibility = View.VISIBLE
+        binding.buttonSend.isEnabled = false
+        binding.buttonSend.text = "Analyzing..."
+        binding.buttonUpload.isEnabled = false
+    }
+
+    private fun hideLoadingIndicator() {
+        binding.loadingContainer.visibility = View.GONE
+        binding.buttonSend.isEnabled = true
+        binding.buttonSend.text = "Send to PlantNet"
+        binding.buttonUpload.isEnabled = true
     }
 
     override fun onDestroyView() {

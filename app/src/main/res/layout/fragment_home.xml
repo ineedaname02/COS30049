@@ -1,71 +1,292 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@color/background_light"
     tools:context=".ui.home.HomeFragment">
 
     <LinearLayout
-        android:orientation="vertical"
-        android:padding="16dp"
         android:layout_width="match_parent"
-        android:layout_height="match_parent">
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp">
 
-        <Button
-            android:id="@+id/buttonUpload"
+        <!-- Header Section -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Select Images (max 5)" />
+            android:orientation="vertical"
+            android:background="@drawable/card_elevated"
+            android:padding="24dp"
+            android:layout_marginBottom="20dp"
+            android:elevation="4dp">
 
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/imageRecyclerView"
-            android:layout_width="match_parent"
-            android:layout_height="100dp"
-            android:layout_marginTop="8dp"
-            android:orientation="horizontal"
-            android:scrollbars="horizontal" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="🌱 Plant Identification"
+                android:textAppearance="@style/TextAppearance.SmartPlant.Headline"
+                android:layout_gravity="center"
+                android:layout_marginBottom="8dp" />
 
-        <Button
-            android:id="@+id/buttonSend"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="Send to PlantNet" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Upload photos to identify plants using AI"
+                android:textAppearance="@style/TextAppearance.SmartPlant.Body"
+                android:layout_gravity="center"
+                android:layout_marginBottom="16dp" />
 
-        <TextView
-            android:id="@+id/textHome"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:paddingTop="16dp"
-            android:text="Upload plant photo to identify"
-            android:textSize="16sp" />
+        </LinearLayout>
 
-        <Button
-            android:id="@+id/buttonCorrect"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Correct"/>
-
-        <Button
-            android:id="@+id/buttonWrong"
-            android:layout_width="102dp"
-            android:layout_height="wrap_content"
-            android:text="Wrong" />
-
-        <EditText
-            android:id="@+id/reasonEditText"
+        <!-- Upload Section -->
+        <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Reason for flagging (optional)"
-            android:layout_marginTop="8dp"
-            android:inputType="text"
-            android:lines="2"
-            android:gravity="top|start"
-            android:background="@android:drawable/edit_text"
-            android:padding="8dp" />
+            android:layout_marginBottom="20dp"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="6dp"
+            app:cardBackgroundColor="@color/surface_light">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="20dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Upload Photos"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/text_primary"
+                    android:layout_marginBottom="12dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Select up to 5 plant photos for identification"
+                    android:textSize="14sp"
+                    android:textColor="@color/text_secondary"
+                    android:layout_marginBottom="16dp" />
+
+                <!-- Upload Button -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/buttonUpload"
+                    android:layout_width="match_parent"
+                    android:layout_height="56dp"
+                    android:text="Select Images (max 5)"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:backgroundTint="@color/primary_green"
+                    android:textColor="@color/text_white"
+                    app:cornerRadius="12dp"
+                    app:rippleColor="@color/primary_green_light"
+                    app:icon="@android:drawable/ic_menu_camera"
+                    app:iconGravity="textStart" />
+
+                <!-- Image Preview RecyclerView -->
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/imageRecyclerView"
+                    android:layout_width="match_parent"
+                    android:layout_height="120dp"
+                    android:layout_marginTop="16dp"
+                    android:background="@drawable/card_background"
+                    android:padding="8dp"
+                    android:visibility="gone" />
+
+            </LinearLayout>
+
+        </androidx.cardview.widget.CardView>
+
+        <!-- Analysis Section -->
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="20dp"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="6dp"
+            app:cardBackgroundColor="@color/surface_light">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="20dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="🔍 Plant Analysis"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/text_primary"
+                    android:layout_marginBottom="12dp" />
+
+                <TextView
+                    android:id="@+id/textHome"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Upload plant photo to identify"
+                    android:textSize="14sp"
+                    android:textColor="@color/text_secondary"
+                    android:layout_marginBottom="16dp"
+                    android:gravity="center" />
+
+                <!-- Loading Indicator -->
+                <LinearLayout
+                    android:id="@+id/loadingContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:gravity="center"
+                    android:padding="20dp"
+                    android:background="@drawable/loading_background"
+                    android:visibility="gone">
+
+                    <ProgressBar
+                        android:id="@+id/loadingProgressBar"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:indeterminateTint="@color/primary_green"
+                        android:layout_marginBottom="12dp" />
+
+                    <TextView
+                        android:id="@+id/loadingMessage"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Analyzing plant images..."
+                        android:textSize="16sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/text_primary"
+                        android:layout_marginBottom="8dp" />
+
+                    <TextView
+                        android:id="@+id/loadingSubMessage"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="This may take a few moments"
+                        android:textSize="14sp"
+                        android:textColor="@color/text_secondary" />
+
+                </LinearLayout>
+
+                <!-- Send Button -->
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/buttonSend"
+                    android:layout_width="match_parent"
+                    android:layout_height="56dp"
+                    android:text="Send to PlantNet"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:backgroundTint="@color/accent_blue"
+                    android:textColor="@color/text_white"
+                    app:cornerRadius="12dp"
+                    app:rippleColor="@color/accent_blue_light"
+                    app:icon="@android:drawable/ic_menu_send"
+                    app:iconGravity="textStart" />
+
+            </LinearLayout>
+
+        </androidx.cardview.widget.CardView>
+
+        <!-- Feedback Section -->
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="6dp"
+            app:cardBackgroundColor="@color/surface_light">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="20dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="💬 Feedback"
+                    android:textSize="18sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/text_primary"
+                    android:layout_marginBottom="12dp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Help us improve by rating the identification"
+                    android:textSize="14sp"
+                    android:textColor="@color/text_secondary"
+                    android:layout_marginBottom="16dp" />
+
+                <!-- Feedback Buttons -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:layout_marginBottom="16dp">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/buttonCorrect"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="8dp"
+                        android:text="Correct"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:backgroundTint="@color/success_green"
+                        android:textColor="@color/text_white"
+                        app:cornerRadius="8dp"
+                        app:rippleColor="@color/primary_green_light" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/buttonWrong"
+                        android:layout_width="0dp"
+                        android:layout_height="48dp"
+                        android:layout_weight="1"
+                        android:layout_marginStart="8dp"
+                        android:text="Wrong"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:backgroundTint="@color/error_red"
+                        android:textColor="@color/text_white"
+                        app:cornerRadius="8dp"
+                        app:rippleColor="@color/error_red" />
+
+                </LinearLayout>
+
+                <!-- Reason Input -->
+                <com.google.android.material.textfield.TextInputLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    app:boxStrokeColor="@color/primary_green"
+                    app:hintTextColor="@color/primary_green"
+                    app:startIconDrawable="@android:drawable/ic_menu_edit"
+                    app:startIconTint="@color/primary_green">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/reasonEditText"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="Reason for flagging (optional)"
+                        android:inputType="textMultiLine"
+                        android:lines="3"
+                        android:gravity="top|start"
+                        android:textColor="@color/text_white"
+                        android:textColorHint="@color/text_hint" />
+
+                </com.google.android.material.textfield.TextInputLayout>
+
+            </LinearLayout>
+
+        </androidx.cardview.widget.CardView>
 
     </LinearLayout>
 
-
-</androidx.constraintlayout.widget.ConstraintLayout>
+</ScrollView>
