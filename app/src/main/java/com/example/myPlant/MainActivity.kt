@@ -17,8 +17,6 @@ import androidx.drawerlayout.widget.DrawerLayout
 import androidx.appcompat.app.AppCompatActivity
 import com.example.myPlant.databinding.ActivityMainBinding
 import com.google.firebase.auth.FirebaseAuth
-import com.example.myPlant.ui.admin.AdminDashboardFragment
-import com.example.myPlant.ui.IotDashboardActivity
 import com.example.myPlant.ui.home.HomeFragment
 import com.example.myPlant.data.local.UserPreferences
 
@@ -27,6 +25,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var appBarConfiguration: AppBarConfiguration
     private lateinit var binding: ActivityMainBinding
 
+    // ---------------------------
+    // CAMERA PERMISSION HANDLING
+    // ---------------------------
     private fun checkCameraPermissionAndLaunch() {
         val cameraPermission = android.Manifest.permission.CAMERA
 
@@ -60,6 +61,9 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // ---------------------------
+    // MAIN ACTIVITY SETUP
+    // ---------------------------
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -69,7 +73,7 @@ class MainActivity : AppCompatActivity() {
         val auth = FirebaseAuth.getInstance()
         val currentUser = auth.currentUser
         if (currentUser == null) {
-            // User not logged in, send to login
+            // User not logged in → go to Login
             startActivity(Intent(this, LoginActivity::class.java))
             finish()
             return
@@ -77,20 +81,23 @@ class MainActivity : AppCompatActivity() {
 
         setSupportActionBar(binding.appBarMain.toolbar)
 
+        // Default FAB message when not overridden by HomeFragment
         binding.appBarMain.fab.setOnClickListener { view ->
-            Snackbar.make(view, "Replace with your own action", Snackbar.LENGTH_LONG)
-                .setAction("Action", null)
-                .setAnchorView(R.id.fab).show()
+            Snackbar.make(view, "Identify a plant from the Home screen.", Snackbar.LENGTH_LONG)
+                .setAnchorView(R.id.fab)
+                .setAction("Action", null).show()
         }
 
         val drawerLayout: DrawerLayout = binding.drawerLayout
         val navView: NavigationView = binding.navView
         val navController = findNavController(R.id.nav_host_fragment_content_main)
 
+        // ---------------------------
+        // FAB Visibility by Destination
+        // ---------------------------
         navController.addOnDestinationChangedListener { _, destination, _ ->
             if (destination.id == R.id.nav_home) {
                 binding.appBarMain.fab.show()
-
                 binding.appBarMain.fab.setOnClickListener {
                     val navHostFragment = supportFragmentManager.findFragmentById(R.id.nav_host_fragment_content_main)
                     val homeFragment = navHostFragment?.childFragmentManager?.fragments
@@ -102,27 +109,35 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // ✅ INCLUDE nav_history in top-level destinations so nav drawer works correctly
+        // ---------------------------
+        // NAVIGATION SETUP
+        // ---------------------------
         appBarConfiguration = AppBarConfiguration(
             setOf(
                 R.id.nav_home,
                 R.id.nav_gallery,
                 R.id.nav_slideshow,
-                R.id.nav_history,  // ✅ add this line
-                R.id.nav_admin_dashboard
+                R.id.nav_history,
+                R.id.nav_admin_dashboard,
+                R.id.nav_plant_location_map  // ✅ Added plant location map
             ), drawerLayout
         )
 
         setupActionBarWithNavController(navController, appBarConfiguration)
         navView.setupWithNavController(navController)
 
-        // Show admin menu group if user is admin
+        // ---------------------------
+        // ADMIN MENU VISIBILITY
+        // ---------------------------
         val navMenu = navView.menu
         val userPrefs = UserPreferences(this)
         val role = userPrefs.userRole
-        val isAdmin = role == "admin" // true if admin
+        val isAdmin = role == "admin"
         navMenu.setGroupVisible(R.id.admin_group, isAdmin)
 
+        // ---------------------------
+        // LOGOUT HANDLER
+        // ---------------------------
         navView.setNavigationItemSelectedListener { menuItem ->
             when (menuItem.itemId) {
                 R.id.nav_logout -> {
@@ -131,7 +146,6 @@ class MainActivity : AppCompatActivity() {
                     finish()
                     true
                 }
-
                 else -> {
                     val handled = androidx.navigation.ui.NavigationUI.onNavDestinationSelected(
                         menuItem, navController
@@ -143,6 +157,9 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // ---------------------------
+    // MENU HANDLING
+    // ---------------------------
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.main, menu)
         return true

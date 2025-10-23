@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">COS30049</string>
+    <string name="app_name">Plant ID</string>
     <string name="navigation_drawer_open">Open navigation drawer</string>
     <string name="navigation_drawer_close">Close navigation drawer</string>
     <string name="nav_header_title">Android Studio</string>
@@ -14,4 +14,8 @@
     <!-- TODO: Remove or change this placeholder text -->
     <string name="hello_blank_fragment">Hello blank fragment</string>
     <string name="fab_email_description">Send email</string>
+
+    <string name="menu_identify_plant">Identify Plant</string>
+    <string name="menu_plant_location_map">Plant Location Map</string>
+    <string name="heatmap_mode">Heatmap Mode</string>
 </resources>

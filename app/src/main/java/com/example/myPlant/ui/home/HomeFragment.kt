@@ -21,7 +21,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.myPlant.BuildConfig
 import com.example.myPlant.LoginActivity
-import com.example.myPlant.PlantViewModelFactory
+import com.example.myPlant.data.model.PlantViewModelFactory
 import com.example.myPlant.data.model.*
 import com.example.myPlant.data.repository.FirebaseRepository
 import com.example.myPlant.data.repository.PlantRepository

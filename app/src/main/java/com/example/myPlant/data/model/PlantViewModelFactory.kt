@@ -1,4 +1,4 @@
-package com.example.myPlant
+package com.example.myPlant.data.model
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
