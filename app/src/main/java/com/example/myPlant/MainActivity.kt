@@ -17,8 +17,10 @@ import androidx.drawerlayout.widget.DrawerLayout
 import androidx.appcompat.app.AppCompatActivity
 import com.example.myPlant.databinding.ActivityMainBinding
 import com.google.firebase.auth.FirebaseAuth
-import com.example.myPlant.ui.admin.AdminDashboardActivity
+import com.example.myPlant.ui.admin.AdminDashboardFragment
+import com.example.myPlant.ui.IotDashboardActivity
 import com.example.myPlant.ui.home.HomeFragment
+import com.example.myPlant.data.local.UserPreferences
 
 class MainActivity : AppCompatActivity() {
 
@@ -106,7 +108,8 @@ class MainActivity : AppCompatActivity() {
                 R.id.nav_home,
                 R.id.nav_gallery,
                 R.id.nav_slideshow,
-                R.id.nav_history  // ✅ add this line
+                R.id.nav_history,  // ✅ add this line
+                R.id.nav_admin_dashboard
             ), drawerLayout
         )
 
@@ -115,17 +118,13 @@ class MainActivity : AppCompatActivity() {
 
         // Show admin menu group if user is admin
         val navMenu = navView.menu
-        val isAdmin = intent.getBooleanExtra("isAdmin", false)
+        val userPrefs = UserPreferences(this)
+        val role = userPrefs.userRole
+        val isAdmin = role == "admin" // true if admin
         navMenu.setGroupVisible(R.id.admin_group, isAdmin)
 
         navView.setNavigationItemSelectedListener { menuItem ->
             when (menuItem.itemId) {
-                R.id.nav_admin_dashboard -> {
-                    // Open Admin Dashboard Activity
-                    startActivity(Intent(this, AdminDashboardActivity::class.java))
-                    true
-                }
-
                 R.id.nav_logout -> {
                     FirebaseAuth.getInstance().signOut()
                     startActivity(Intent(this, LoginActivity::class.java))
