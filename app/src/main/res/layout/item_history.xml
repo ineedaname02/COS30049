@@ -1,54 +1,63 @@
 <?xml version="1.0" encoding="utf-8"?>
 <androidx.cardview.widget.CardView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_margin="8dp"
+    android:layout_marginHorizontal="8dp"
+    android:layout_marginVertical="4dp"
     app:cardCornerRadius="12dp"
     app:cardElevation="4dp">
 
-    <LinearLayout
-        xmlns:android="http://schemas.android.com/apk/res/android"
+    <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:padding="8dp">
+        android:padding="12dp">
 
         <ImageView
-            android:id="@+id/plantImage"
-            android:layout_width="100dp"
-            android:layout_height="100dp"
+            android:id="@+id/historyImage"
+            android:layout_width="80dp"
+            android:layout_height="80dp"
             android:scaleType="centerCrop"
-            android:layout_marginEnd="8dp" />
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            tools:src="@drawable/ic_menu_gallery" />
 
-        <LinearLayout
+        <TextView
+            android:id="@+id/historyScientificName"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:layout_weight="1">
+            android:layout_marginStart="12dp"
+            android:textAppearance="?attr/textAppearanceListItem"
+            android:textStyle="bold"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toEndOf="@id/historyImage"
+            app:layout_constraintTop_toTopOf="@id/historyImage"
+            tools:text="Quercus robur" />
 
+        <TextView
+            android:id="@+id/historyDate"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textAppearance="?attr/textAppearanceListItemSecondary"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="@id/historyScientificName"
+            app:layout_constraintTop_toBottomOf="@id/historyScientificName"
+            tools:text="24 Oct 2025, 8:30 AM" />
 
-            <TextView
-                android:id="@+id/plantName"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Scientific Name"
-                android:textStyle="bold"
-                android:textSize="16sp" />
+        <TextView
+            android:id="@+id/iucnStatus"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textAppearance="?attr/textAppearanceCaption"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="@id/historyScientificName"
+            app:layout_constraintTop_toBottomOf="@id/historyDate"
+            tools:text="IUCN Status: Least Concern" />
 
-            <TextView
-                android:id="@+id/confidence"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Confidence: 97%"
-                android:textSize="14sp" />
+    </androidx.constraintlayout.widget.ConstraintLayout>
 
-            <TextView
-                android:id="@+id/iucnCategory"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="IUCN: Least Concern"
-                android:textSize="14sp" />
-        </LinearLayout>
-    </LinearLayout>
 </androidx.cardview.widget.CardView>
+    

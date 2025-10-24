@@ -21,6 +21,7 @@ import com.google.maps.android.heatmaps.Gradient
 import com.google.maps.android.heatmaps.HeatmapTileProvider
 import java.text.SimpleDateFormat
 import java.util.*
+import androidx.navigation.fragment.findNavController
 
 
 class PlantLocationMapFragment : Fragment(), OnMapReadyCallback {
@@ -31,7 +32,6 @@ class PlantLocationMapFragment : Fragment(), OnMapReadyCallback {
     private var isMapReady = false
     private var heatmapOverlay: TileOverlay? = null
 
-    // Use a shared ViewModel to get observation data
     private val viewModel: PlantViewModel by activityViewModels {
         PlantViewModelFactory(
             plantRepository = PlantRepository(BuildConfig.PLANTNET_API_KEY),
@@ -40,35 +40,52 @@ class PlantLocationMapFragment : Fragment(), OnMapReadyCallback {
     }
 
     private val args: PlantLocationMapFragmentArgs by navArgs()
+    private var currentMapMode: String = "GLOBAL" // A reliable variable to hold the true mode
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
     ): View {
         val view = inflater.inflate(R.layout.fragment_plant_location_map, container, false)
         heatmapToggle = view.findViewById(R.id.toggle_heatmap)
+
+        // **DETERMINE THE TRUE MODE HERE, ONCE.**
+        // This is the failsafe check that bypasses the argument bug.
+        val previousDestinationId = findNavController().previousBackStackEntry?.destination?.id
+        currentMapMode = if (previousDestinationId == R.id.action_global_nav_my_observations_map) {
+            "MY_HISTORY"
+        } else {
+            "GLOBAL" // Default to GLOBAL for all other cases
+        }
+        Log.d("PlantLocationMap", "MODE DETERMINED in onCreateView: $currentMapMode")
+
         return view
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        setupMap()
+        setupMap() // This will call onMapReady where data is loaded
 
-        // ✅ Show or hide the heatmap toggle based on the mode
-        if (args.mapMode == "MY_HISTORY") {
+        // **ALL UI LOGIC STAYS IN onViewCreated**
+        // This ensures the heatmap toggle is correctly managed every time the view is created.
+        if (currentMapMode == "MY_HISTORY") {
+            isHeatmapMode = false // History map shows markers
             heatmapToggle.visibility = View.GONE
-            isHeatmapMode = false // Default to markers for personal history
-        } else {
+        } else { // GLOBAL mode
+            isHeatmapMode = true // Global map shows heatmap
             heatmapToggle.visibility = View.VISIBLE
-            heatmapToggle.isChecked = isHeatmapMode
+            heatmapToggle.isChecked = true
+
+            // Set up the listener only for the global map
             heatmapToggle.setOnCheckedChangeListener { _, isChecked ->
                 isHeatmapMode = isChecked
-                if (isMapReady) updateMapDisplay(viewModel.allObservations.value)
+                if (isMapReady) {
+                    updateMapDisplay(viewModel.allObservations.value)
+                }
             }
         }
     }
 
     private fun setupMap() {
-        // Use childFragmentManager for fragments inside fragments
         val mapFragment = childFragmentManager.findFragmentById(R.id.map) as? SupportMapFragment
         mapFragment?.getMapAsync(this)
     }
@@ -76,16 +93,25 @@ class PlantLocationMapFragment : Fragment(), OnMapReadyCallback {
     override fun onMapReady(map: GoogleMap) {
         googleMap = map
         isMapReady = true
-        Log.d("PlantLocationMap", "Map is ready in ${args.mapMode} mode.")
 
-        // ✅ Decide which data to load and observe based on the mode
-        if (args.mapMode == "MY_HISTORY") {
+        // **ALL DATA LOADING LOGIC STAYS IN onMapReady**
+        // Remove previous observers to prevent data contamination from old sessions.
+        viewModel.allObservations.removeObservers(viewLifecycleOwner)
+        viewModel.userObservations.removeObservers(viewLifecycleOwner)
+
+        Log.d("PlantLocationMap", "Loading data for mode: $currentMapMode")
+
+        if (currentMapMode == "MY_HISTORY") {
+            // Load and observe user data
             viewModel.userObservations.observe(viewLifecycleOwner) { observations ->
+                Log.d("PlantLocationMap", "Updating map with ${observations?.size ?: 0} user observations.")
                 updateMapDisplay(observations)
             }
             viewModel.loadUserObservations()
         } else { // GLOBAL mode
+            // Load and observe global data
             viewModel.allObservations.observe(viewLifecycleOwner) { observations ->
+                Log.d("PlantLocationMap", "Updating map with ${observations?.size ?: 0} global observations.")
                 updateMapDisplay(observations)
             }
             viewModel.loadAllObservations()
@@ -93,16 +119,17 @@ class PlantLocationMapFragment : Fragment(), OnMapReadyCallback {
     }
 
     private fun updateMapDisplay(observations: List<Observation>?) {
-        if (!::googleMap.isInitialized || observations == null) {
-            Log.d("PlantLocationMap", "Map or observations not ready.")
+        if (!::googleMap.isInitialized || !isMapReady || observations == null) {
+            Log.w("PlantLocationMap", "Cannot update map, not ready or observations are null.")
             return
         }
         googleMap.clear()
+        heatmapOverlay?.remove() // Explicitly remove old heatmap overlay
 
-        // ✅ Apply admin/specialist logic HERE in the future
-        // For example:
-        // val filteredObservations = if (user.isAdmin) observations else observations.filter { it.iucnCategory != "Endangered" }
-        // Then pass filteredObservations to the functions below.
+        if (observations.isEmpty()) {
+            Log.d("PlantLocationMap", "No observations to display.")
+            return
+        }
 
         if (isHeatmapMode) {
             addHeatmapToMap(observations)
@@ -112,30 +139,25 @@ class PlantLocationMapFragment : Fragment(), OnMapReadyCallback {
     }
 
     private fun addMarkersToMap(observations: List<Observation>) {
-        if (observations.isEmpty()) return
         val boundsBuilder = LatLngBounds.Builder()
-
         for (obs in observations) {
             val lat = obs.geolocation?.lat
             val lng = obs.geolocation?.lng
-            if (lat == null || lng == null) continue
-
-            val position = LatLng(lat, lng)
-            val name = obs.currentIdentification.scientificName.ifEmpty { "Unknown" }
-            val snippet = obs.timestamp?.toDate()?.let {
-                SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(it)
-            } ?: "Observation"
-
-            googleMap.addMarker(MarkerOptions().position(position).title(name).snippet(snippet))
-            boundsBuilder.include(position)
-        }
-
-        googleMap.setOnMapLoadedCallback {
-            try {
-                googleMap.animateCamera(CameraUpdateFactory.newLatLngBounds(boundsBuilder.build(), 120))
-            } catch (e: IllegalStateException) {
-                Log.w("PlantLocationMap", "Could not animate camera to bounds: ${e.message}")
+            if (lat != null && lng != null) {
+                val position = LatLng(lat, lng)
+                val name = obs.currentIdentification.scientificName.ifEmpty { "Unknown" }
+                val snippet = obs.timestamp?.toDate()?.let {
+                    SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(it)
+                } ?: "Observation"
+                googleMap.addMarker(MarkerOptions().position(position).title(name).snippet(snippet))
+                boundsBuilder.include(position)
             }
+        }
+        try {
+            googleMap.animateCamera(CameraUpdateFactory.newLatLngBounds(boundsBuilder.build(), 120))
+        } catch (e: IllegalStateException) {
+            // Happens if no markers were added
+            Log.w("PlantLocationMap", "Could not animate camera for markers: ${e.message}")
         }
     }
 
@@ -143,28 +165,24 @@ class PlantLocationMapFragment : Fragment(), OnMapReadyCallback {
         val latLngs = observations.mapNotNull { obs ->
             obs.geolocation?.let { LatLng(it.lat, it.lng) }
         }
-
         if (latLngs.isEmpty()) return
 
         val gradient = Gradient(
-            intArrayOf(Color.BLUE, Color.GREEN, Color.YELLOW, Color.RED), // Colors for the heatmap
-            floatArrayOf(0.2f, 0.4f, 0.6f, 1f) // Distribution points for the colors
+            intArrayOf(Color.BLUE, Color.YELLOW, Color.RED),
+            floatArrayOf(0.2f, 0.6f, 1.0f)
         )
-
         val provider = HeatmapTileProvider.Builder()
             .data(latLngs)
             .gradient(gradient)
-            .radius(50) // Radius of influence for each data point in pixels
+            .radius(50)
             .build()
-
         heatmapOverlay = googleMap.addTileOverlay(TileOverlayOptions().tileProvider(provider))
 
-        // Zoom camera to fit all heatmap points
         try {
             val bounds = LatLngBounds.Builder().apply { latLngs.forEach { include(it) } }.build()
             googleMap.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, 100))
         } catch (e: IllegalStateException) {
-            Log.w("PlantLocationMap", "Heatmap bounds error: ${e.message}")
+            Log.w("PlantLocationMap", "Could not animate camera for heatmap: ${e.message}")
         }
     }
 }

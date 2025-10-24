@@ -107,6 +107,12 @@ class MainActivity : AppCompatActivity() {
             } else {
                 binding.appBarMain.fab.hide()
             }
+            // ✅ HANDLE LOGOUT HERE
+            if (destination.id == R.id.nav_logout) {
+                FirebaseAuth.getInstance().signOut()
+                startActivity(Intent(this, LoginActivity::class.java))
+                finish()
+            }
         }
 
         // ---------------------------
@@ -153,27 +159,6 @@ class MainActivity : AppCompatActivity() {
         val role = userPrefs.userRole
         val isAdmin = role == "admin"
         navMenu.setGroupVisible(R.id.admin_group, isAdmin)
-
-        // ---------------------------
-        // LOGOUT HANDLER
-        // ---------------------------
-        navView.setNavigationItemSelectedListener { menuItem ->
-            when (menuItem.itemId) {
-                R.id.nav_logout -> {
-                    FirebaseAuth.getInstance().signOut()
-                    startActivity(Intent(this, LoginActivity::class.java))
-                    finish()
-                    true
-                }
-                else -> {
-                    val handled = androidx.navigation.ui.NavigationUI.onNavDestinationSelected(
-                        menuItem, navController
-                    )
-                    if (handled) drawerLayout.closeDrawers()
-                    handled
-                }
-            }
-        }
     }
 
     // ---------------------------
