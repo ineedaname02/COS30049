@@ -189,8 +189,9 @@ class HomeFragment : Fragment() {
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(requireActivity())
 
         // ViewModel setup
-        val repository = PlantRepository(BuildConfig.PLANTNET_API_KEY)
-        val factory = PlantViewModelFactory(repository)
+        val plantRepository = PlantRepository(BuildConfig.PLANTNET_API_KEY)
+        firebaseRepository = FirebaseRepository(requireContext())
+        val factory = PlantViewModelFactory(plantRepository, firebaseRepository)
         viewModel = androidx.lifecycle.ViewModelProvider(this, factory)[PlantViewModel::class.java]
 
         firebaseRepository = FirebaseRepository(requireContext())

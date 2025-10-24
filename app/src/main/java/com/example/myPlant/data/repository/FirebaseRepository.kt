@@ -2,6 +2,7 @@ package com.example.myPlant.data.repository
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import com.example.myPlant.data.model.*
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
@@ -296,5 +297,37 @@ class FirebaseRepository(private val context: Context) {
         }
     }
 
+    suspend fun getAllObservations(): List<Observation> {
+        return try {
+            val snapshot = observationsCollection
+                .orderBy("timestamp", Query.Direction.DESCENDING) // Get the most recent first
+                .limit(500) // IMPORTANT: Limit docs to avoid high cost & slow loads
+                .get()
+                .await()
 
+            // Use Firestore's automatic object mapping to convert documents.
+            snapshot.toObjects(Observation::class.java)
+        } catch (e: Exception) {
+            Log.e("FirebaseRepository", "Error fetching all observations: ${e.message}", e)
+            emptyList() // Return an empty list on error to prevent crashes
+        }
+    }
+
+    // ✅ ADD THIS FOR THE USER'S HISTORY MAP
+    suspend fun getFullUserObservations(userId: String): List<Observation> {
+        return try {
+            val snapshot = observationsCollection
+            .whereEqualTo("userId", userId)
+            .orderBy("timestamp", Query.Direction.DESCENDING)
+            .limit(200) // Limit to user's 200 most recent for performance
+            .get()
+            .await()
+
+            // This automatically converts documents to the full Observation data class
+            snapshot.toObjects(Observation::class.java)
+        } catch (e: Exception) {
+            Log.e("FirebaseRepository", "Error fetching full user observations: ${e.message}", e)
+            emptyList() // Return an empty list on error to prevent crashes
+        }
+    }
 }
