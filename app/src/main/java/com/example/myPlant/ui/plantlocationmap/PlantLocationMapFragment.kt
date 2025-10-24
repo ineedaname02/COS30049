@@ -23,7 +23,6 @@ import java.text.SimpleDateFormat
 import java.util.*
 import androidx.navigation.fragment.findNavController
 
-
 class PlantLocationMapFragment : Fragment(), OnMapReadyCallback {
 
     private lateinit var googleMap: GoogleMap
