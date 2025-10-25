@@ -22,6 +22,7 @@ import com.google.maps.android.heatmaps.HeatmapTileProvider
 import java.text.SimpleDateFormat
 import java.util.*
 import androidx.navigation.fragment.findNavController
+import com.google.android.gms.maps.MapsInitializer
 
 class PlantLocationMapFragment : Fragment(), OnMapReadyCallback {
 
@@ -62,6 +63,11 @@ class PlantLocationMapFragment : Fragment(), OnMapReadyCallback {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+
+        MapsInitializer.initialize(requireContext(), MapsInitializer.Renderer.LATEST) { renderer ->
+            Log.d("PlantLocationMap", "Maps renderer initialized: $renderer")
+        }
+
         setupMap() // This will call onMapReady where data is loaded
 
         // **ALL UI LOGIC STAYS IN onViewCreated**

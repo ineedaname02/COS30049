@@ -15,7 +15,7 @@ interface PlantNetApi {
         @Query("api-key") apiKey: String,
         @Query("include-related-images") includeRelated: Boolean = false,
         @Query("no-reject") noReject: Boolean = false,
-        @Query("nb-results") nbResults: Int = 10,
+        @Query("nb-results") nbResults: Int = 3,
         @Query("lang") lang: String = "en",
         @Query("type") type: String = "kt"
     ): Response<PlantNetResponse>
