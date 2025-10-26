@@ -171,25 +171,56 @@ class FirebaseRepository(private val context: Context) {
         }
     }
 
-    private suspend fun addToTrainingDataIfConfident(observation: Observation, topSuggestion: AISuggestion) {
-        val trainingData = TrainingData(
-            trainingId = UUID.randomUUID().toString(),
-            plantId = topSuggestion.plantId,
-            imageUrl = observation.plantImageUrls.first(),
-            sourceType = "ai_high_confidence",
-            sourceObservationId = observation.observationId,
-            verifiedBy = "ai_system",
-            verificationDate = Timestamp.now(),
-            verificationMethod = "auto_confidence",
-            confidenceScore = topSuggestion.confidence,
-            geolocation = observation.geolocation,
-            isActive = true,
-            sourceApi = topSuggestion.source
-        )
-        trainingDataCollection.document(trainingData.trainingId)
-            .set(trainingData, SetOptions.merge())
-            .await()
+    private suspend fun addToTrainingDataIfConfident(
+        observation: Observation,
+        topSuggestion: AISuggestion
+    ) {
+        val scientificName = topSuggestion.scientificName
+            .replace("[^A-Za-z0-9 ]".toRegex(), "_")
+            .trim()
+            .lowercase()
+
+        val originalImageUrl = observation.plantImageUrls.firstOrNull()
+        if (originalImageUrl.isNullOrEmpty()) return
+
+        try {
+            // 🔹 1️⃣ Copy image from original Storage location to trainingData/
+            val sourceRef = FirebaseStorage.getInstance().getReferenceFromUrl(originalImageUrl)
+            val newFileName = "${UUID.randomUUID()}.jpg"
+            val destRef = storage.reference.child("trainingData/$scientificName/$newFileName")
+
+            // Download → upload via stream
+            val bytes = sourceRef.getBytes(5 * 1024 * 1024).await() // max 5MB per image
+            destRef.putBytes(bytes).await()
+            val newImageUrl = destRef.downloadUrl.await().toString()
+
+            // 🔹 2️⃣ Save metadata to Firestore
+            val trainingData = TrainingData(
+                trainingId = UUID.randomUUID().toString(),
+                plantId = topSuggestion.plantId,
+                imageUrl = newImageUrl, // use the copied image URL
+                sourceType = "ai_high_confidence",
+                sourceObservationId = observation.observationId,
+                verifiedBy = "ai_system",
+                verificationDate = Timestamp.now(),
+                verificationMethod = "auto_confidence",
+                confidenceScore = topSuggestion.confidence,
+                geolocation = observation.geolocation,
+                isActive = true,
+                sourceApi = topSuggestion.source
+            )
+
+            trainingDataCollection.document(trainingData.trainingId)
+                .set(trainingData, SetOptions.merge())
+                .await()
+
+            Log.d("TrainingData", "✅ Saved training data for $scientificName")
+
+        } catch (e: Exception) {
+            Log.e("TrainingData", "⚠️ Failed to save training data for $scientificName: ${e.message}", e)
+        }
     }
+
 
     suspend fun flagObservation(observationId: String, reason: String): String {
         val currentUser = auth.currentUser ?: throw Exception("User not authenticated")
@@ -292,36 +323,6 @@ class FirebaseRepository(private val context: Context) {
             println("Failed to update user stats: ${e.message}")
         }
     }
-// this block causes slowness
-//    suspend fun getUserObservations(userId: String): List<PlantObservation> {
-//        val collection = FirebaseFirestore.getInstance().collection("observations")
-//        val query = collection.whereEqualTo("userId", userId)
-//
-//        val snapshot = try {
-//            query.orderBy("timestamp", Query.Direction.DESCENDING).get().await()
-//        } catch (e: Exception) {
-//            // Fallback if index not built yet
-//            query.get().await()
-//        }
-//
-//        return snapshot.documents.mapNotNull { doc ->
-//            val data = doc.data ?: return@mapNotNull null
-//
-//            val currentId = data["currentIdentification"] as? Map<*, *>
-//            val name = currentId?.get("scientificName") as? String ?: "Unknown"
-//            val confidence = (currentId?.get("confidence") as? Number)?.toDouble() ?: 0.0
-//            val images = (data["plantImageUrls"] as? List<*>)?.filterIsInstance<String>() ?: emptyList()
-//            val category = data["iucnCategory"] as? String
-//
-//            PlantObservation(
-//                id = doc.id,
-//                scientificName = name,
-//                confidence = confidence,
-//                iucnCategory = category,
-//                imageUrls = images
-//            )
-//        }
-//    }
 
     suspend fun getAllObservations(): List<Observation> {
         return try {
@@ -402,6 +403,7 @@ class FirebaseRepository(private val context: Context) {
     }
 
     // ✅ Process admin validation (correct / wrong)
+    // ✅ Improved Admin Validation Process
     suspend fun processAdminValidation(
         observationId: String,
         adminId: String,
@@ -410,27 +412,104 @@ class FirebaseRepository(private val context: Context) {
         correctedCommonName: String? = null
     ): Boolean {
         return try {
-            val db = FirebaseFirestore.getInstance()
-            val docRef = db.collection("observations").document(observationId)
+            val docRef = observationsCollection.document(observationId)
+            val snapshot = docRef.get().await()
+            val observation = snapshot.toObject(Observation::class.java)
+
+            if (observation == null) {
+                Log.w("AdminValidation", "⚠️ Observation $observationId not found")
+                return false
+            }
 
             val updateData = hashMapOf<String, Any>(
                 "verifiedBy" to adminId,
                 "isCorrect" to isCorrect,
-                "verifiedAt" to com.google.firebase.Timestamp.now()
+                "verifiedAt" to Timestamp.now(),
+                "currentIdentification.status" to if (isCorrect) "admin_verified" else "admin_corrected"
             )
 
-            if (!isCorrect) {
-                correctedScientificName?.let { updateData["correctedScientificName"] = it }
-                correctedCommonName?.let { updateData["correctedCommonName"] = it }
-            }
+            correctedScientificName?.let { updateData["currentIdentification.scientificName"] = it }
+            correctedCommonName?.let { updateData["currentIdentification.commonName"] = it }
 
             docRef.update(updateData).await()
-            true  // ✅ success
+
+            // ✅ If correct, add to trainingData
+            if (isCorrect) {
+                addToTrainingDataFromAdmin(
+                    observation = observation,
+                    adminId = adminId,
+                    correctedScientificName = correctedScientificName,
+                    correctedCommonName = correctedCommonName
+                )
+            }
+
+            // ✅ Remove from flagQueue (clean up)
+            flagQueueCollection.document(observationId)
+                .update("status", "resolved")
+                .await()
+
+            Log.d("AdminValidation", "✅ Admin verified observation $observationId")
+
+            true
         } catch (e: Exception) {
-            e.printStackTrace()
-            false // ❌ failed
+            Log.e("AdminValidation", "❌ Failed admin validation: ${e.message}", e)
+            false
         }
     }
+
+    private suspend fun addToTrainingDataFromAdmin(
+        observation: Observation,
+        adminId: String,
+        correctedScientificName: String? = null,
+        correctedCommonName: String? = null
+    ) {
+        val scientificName = correctedScientificName
+            ?.replace("[^A-Za-z0-9 ]".toRegex(), "_")
+            ?.trim()
+            ?.lowercase()
+            ?: observation.currentIdentification?.scientificName?.lowercase()
+            ?: "unknown"
+
+        val originalImageUrl = observation.plantImageUrls.firstOrNull()
+        if (originalImageUrl.isNullOrEmpty()) {
+            Log.w("TrainingData", "⚠️ No image found for ${observation.observationId}")
+            return
+        }
+
+        try {
+            val sourceRef = FirebaseStorage.getInstance().getReferenceFromUrl(originalImageUrl)
+            val newFileName = "${UUID.randomUUID()}.jpg"
+            val destRef = storage.reference.child("trainingData/$scientificName/$newFileName")
+
+            val bytes = sourceRef.getBytes(5 * 1024 * 1024).await()
+            destRef.putBytes(bytes).await()
+            val newImageUrl = destRef.downloadUrl.await().toString()
+
+            val trainingData = TrainingData(
+                trainingId = UUID.randomUUID().toString(),
+                plantId = observation.observationId,
+                imageUrl = newImageUrl,
+                sourceType = "admin_verified",
+                sourceObservationId = observation.observationId,
+                verifiedBy = adminId,
+                verificationDate = Timestamp.now(),
+                verificationMethod = "manual",
+                confidenceScore = observation.currentIdentification?.confidence ?: 1.0,
+                geolocation = observation.geolocation,
+                isActive = true
+            )
+
+            trainingDataCollection.document(trainingData.trainingId)
+                .set(trainingData, SetOptions.merge())
+                .await()
+
+            Log.d("TrainingData", "✅ Added admin-verified training data for $scientificName")
+
+        } catch (e: Exception) {
+            Log.e("TrainingData", "❌ Failed to save admin training data: ${e.message}", e)
+        }
+    }
+
 
 
 }
