@@ -8,6 +8,7 @@ import kotlinx.coroutines.launch
 import okhttp3.MultipartBody
 import android.net.Uri
 import com.google.firebase.auth.FirebaseAuth
+import com.example.myPlant.ml.ClassificationResult
 
 class PlantViewModel(
     private val plantRepository: PlantRepository,
@@ -30,6 +31,8 @@ class PlantViewModel(
 
     private val _allObservations = MutableLiveData<List<Observation>>()
     val allObservations: LiveData<List<Observation>> = _allObservations
+
+    var localPredictions: List<ClassificationResult>? = null
 
     fun identifyPlant(
         images: List<MultipartBody.Part>,
