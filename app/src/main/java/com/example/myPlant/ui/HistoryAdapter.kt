@@ -8,39 +8,46 @@ import androidx.recyclerview.widget.RecyclerView
 import com.example.myPlant.R
 
 data class IotReading(
-    val deviceId: String,
-    val temperature: Double,
-    val humidity: Double,
-    val moisture: Double,
-    val rain: Long,
-    val sound: Long,
-    val timestamp: String
+    val deviceId: String = "",
+    val temperature: Double = 0.0,
+    val humidity: Double = 0.0,
+    val moisture: Double = 0.0,
+    val rain: Long = 0,
+    val sound: Long = 0,
+    val timestamp: String = ""
 )
 
 class HistoryAdapter(
-    private val items: List<IotReading>
-) : RecyclerView.Adapter<HistoryAdapter.ViewHolder>() {
+    private val historyList: List<IotReading>
+) : RecyclerView.Adapter<HistoryAdapter.HistoryViewHolder>() {
 
-    class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
-        val textDevice: TextView = view.findViewById(R.id.textDevice)
-        val textTemp: TextView = view.findViewById(R.id.textTemp)
-        val textHumidity: TextView = view.findViewById(R.id.textHumidity)
-        val textTimestamp: TextView = view.findViewById(R.id.textTimestamp)
+    inner class HistoryViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+        val tvDeviceId: TextView = itemView.findViewById(R.id.tvDeviceId)
+        val tvTemperature: TextView = itemView.findViewById(R.id.tvTemperature)
+        val tvHumidity: TextView = itemView.findViewById(R.id.tvHumidity)
+        val tvMoisture: TextView = itemView.findViewById(R.id.tvMoisture)
+        val tvRain: TextView = itemView.findViewById(R.id.tvRain)
+        val tvSound: TextView = itemView.findViewById(R.id.tvSound)
+        val tvTimestamp: TextView = itemView.findViewById(R.id.tvTimestamp)
     }
 
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): HistoryViewHolder {
         val view = LayoutInflater.from(parent.context)
             .inflate(R.layout.item_history_card, parent, false)
-        return ViewHolder(view)
+        return HistoryViewHolder(view)
     }
 
-    override fun getItemCount(): Int = items.size
+    override fun onBindViewHolder(holder: HistoryViewHolder, position: Int) {
+        val item = historyList[position]
 
-    override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-        val r = items[position]
-        holder.textDevice.text = "Device: ${r.deviceId}"
-        holder.textTemp.text = "Temp: ${r.temperature}°C"
-        holder.textHumidity.text = "Humidity: ${r.humidity}%"
-        holder.textTimestamp.text = r.timestamp
+        holder.tvDeviceId.text = "Device: ${item.deviceId}"
+        holder.tvTemperature.text = "Temp: ${item.temperature}°C"
+        holder.tvHumidity.text = "Humidity: ${item.humidity}%"
+        holder.tvMoisture.text = "Moisture: ${item.moisture}%"
+        holder.tvRain.text = "Rain: ${item.rain}"
+        holder.tvSound.text = "Sound: ${item.sound}"
+        holder.tvTimestamp.text = item.timestamp
     }
+
+    override fun getItemCount(): Int = historyList.size
 }

@@ -38,6 +38,8 @@
         <activity
             android:name=".ui.IotDashboardActivity"
             android:exported="false" />
+        <activity android:name=".ui.HistoryActivity" />
+
 
         <provider
             android:name="androidx.core.content.FileProvider"
