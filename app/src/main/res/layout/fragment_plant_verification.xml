@@ -1,24 +1,127 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/scrollRoot"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:padding="24dp">
+    android:padding="16dp">
 
-    <TextView
-        android:id="@+id/titleText"
-        android:text="Plant Verification"
-        android:textSize="22sp"
-        android:textStyle="bold"
-        android:layout_marginBottom="16dp"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"/>
+    <LinearLayout
+        android:id="@+id/container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
 
-    <TextView
-        android:id="@+id/textResult"
-        android:text="Fetching data..."
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"/>
+        <!-- Image -->
+        <ImageView
+            android:id="@+id/imgObservation"
+            android:layout_width="match_parent"
+            android:layout_height="250dp"
+            android:scaleType="centerCrop"
+            android:contentDescription="Observation image" />
 
-</LinearLayout>
+        <!-- AI label + confidence -->
+        <TextView
+            android:id="@+id/tvAiName"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="AI GIVEN NAME"
+            android:textSize="18sp"
+            android:paddingTop="12dp" />
+
+        <TextView
+            android:id="@+id/tvConfidence"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Confidence: 0.00"
+            android:paddingTop="4dp" />
+
+        <!-- IUCN -->
+        <TextView
+            android:id="@+id/tvIucn"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="IUCN: -"
+            android:paddingTop="4dp" />
+
+        <!-- Admin action buttons -->
+        <LinearLayout
+            android:id="@+id/actionRow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="end"
+            android:paddingTop="12dp">
+
+            <Button
+                android:id="@+id/btnWrong"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Wrong" />
+
+            <Button
+                android:id="@+id/btnCorrect"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Correct"
+                android:layout_marginStart="12dp" />
+        </LinearLayout>
+
+        <!-- Correction form (hidden by default) -->
+        <LinearLayout
+            android:id="@+id/correctionForm"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone"
+            android:paddingTop="12dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Corrected Name :"
+                android:paddingTop="4dp"/>
+
+            <EditText
+                android:id="@+id/etCorrectedScientific"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Corrected scientific name" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Corrected Common Name :"
+                android:paddingTop="8dp"/>
+
+            <EditText
+                android:id="@+id/etCorrectedCommon"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="Corrected common name (optional)" />
+
+            <Button
+                android:id="@+id/btnSubmitCorrection"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Submit Correction"
+                android:layout_marginTop="12dp"
+                android:layout_gravity="end" />
+        </LinearLayout>
+
+        <!-- Navigation for admin: next pending -->
+        <Button
+            android:id="@+id/btnNext"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Next Pending"
+            android:layout_marginTop="16dp" />
+
+        <ProgressBar
+            android:id="@+id/progress"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:visibility="gone"
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="12dp" />
+    </LinearLayout>
+</ScrollView>

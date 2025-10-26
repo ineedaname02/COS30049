@@ -106,6 +106,32 @@ class FirebaseRepository(private val context: Context) {
         // 8️⃣ Update user stats
         updateUserContributionStats(currentUser.uid, "observations")
 
+        // 7️⃣ Add to training data if confident
+        if (topConfidence > 0.8 && topSuggestion != null) {
+            addToTrainingDataIfConfident(observation, topSuggestion)
+        }
+
+// 🆕 7.5️⃣ Add to flag queue if AI unsure (low confidence)
+        if (topConfidence <= 0.7) {
+            val currentUser = auth.currentUser
+            if (currentUser != null) {
+                val flagData = mapOf(
+                    "observationId" to observationId,
+                    "flaggedBy" to currentUser.uid,
+                    "flaggedAt" to Timestamp.now(),
+                    "reason" to "Low confidence AI prediction (${String.format("%.2f", topConfidence)})",
+                    "status" to "pending",
+                    "priority" to if (topConfidence < 0.4) "high" else "medium"
+                )
+
+                flagQueueCollection.document(observationId)
+                    .set(flagData, SetOptions.merge())
+                    .await()
+
+                Log.d("FlagQueue", "⚠️ Added low-confidence observation $observationId to flagQueue")
+            }
+        }
+
         return observationId
     }
 
@@ -330,4 +356,81 @@ class FirebaseRepository(private val context: Context) {
             emptyList() // Return an empty list on error to prevent crashes
         }
     }
+
+    // ✅ Fetch pending observations for admin validation
+    suspend fun fetchPendingObservations(limit: Int = 30): List<PlantObservation> {
+        return try {
+            val snapshot = flagQueueCollection
+                .whereEqualTo("status", "pending")
+                .orderBy("flaggedAt", Query.Direction.ASCENDING)
+                .limit(limit.toLong())
+                .get()
+                .await()
+
+            val flaggedIds = snapshot.documents.mapNotNull { it.getString("observationId") }
+            if (flaggedIds.isEmpty()) return emptyList()
+
+            val observations = mutableListOf<PlantObservation>()
+            for (id in flaggedIds) {
+                val doc = observationsCollection.document(id).get().await()
+                val data = doc.toObject(Observation::class.java) ?: continue
+
+                val current = data.currentIdentification
+                observations.add(
+                    PlantObservation(
+                        id = id,
+                        scientificName = current?.scientificName ?: "Unknown",
+                        confidence = current?.confidence ?: 0.0,
+                        iucnCategory = data.iucnCategory ?: "-",
+                        imageUrls = data.plantImageUrls
+                    )
+                )
+            }
+            observations.sortedByDescending {
+                // Prioritize endangered species first
+                when (it.iucnCategory?.lowercase()) {
+                    "critically endangered" -> 3
+                    "endangered" -> 2
+                    "vulnerable" -> 1
+                    else -> 0
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("FirebaseRepository", "Error fetching pending observations: ${e.message}", e)
+            emptyList()
+        }
+    }
+
+    // ✅ Process admin validation (correct / wrong)
+    suspend fun processAdminValidation(
+        observationId: String,
+        adminId: String,
+        isCorrect: Boolean,
+        correctedScientificName: String? = null,
+        correctedCommonName: String? = null
+    ): Boolean {
+        return try {
+            val db = FirebaseFirestore.getInstance()
+            val docRef = db.collection("observations").document(observationId)
+
+            val updateData = hashMapOf<String, Any>(
+                "verifiedBy" to adminId,
+                "isCorrect" to isCorrect,
+                "verifiedAt" to com.google.firebase.Timestamp.now()
+            )
+
+            if (!isCorrect) {
+                correctedScientificName?.let { updateData["correctedScientificName"] = it }
+                correctedCommonName?.let { updateData["correctedCommonName"] = it }
+            }
+
+            docRef.update(updateData).await()
+            true  // ✅ success
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false // ❌ failed
+        }
+    }
+
+
 }
