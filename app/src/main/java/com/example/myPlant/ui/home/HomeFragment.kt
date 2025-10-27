@@ -17,6 +17,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.app.ActivityCompat
 import androidx.core.content.FileProvider
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.myPlant.BuildConfig
@@ -26,6 +27,7 @@ import com.example.myPlant.data.model.*
 import com.example.myPlant.data.repository.FirebaseRepository
 import com.example.myPlant.data.repository.PlantRepository
 import com.example.myPlant.databinding.FragmentHomeBinding
+import com.example.myPlant.ml.MyAIClassifier
 import com.google.android.gms.location.*
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
@@ -34,6 +36,7 @@ import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
 import java.io.File
 import java.io.FileOutputStream
+
 
 class HomeFragment : Fragment() {
 
@@ -60,6 +63,8 @@ class HomeFragment : Fragment() {
     private var lastClickTime = 0L
     private val debounceInterval = 1000L
     private var hasUploadedOnce = false
+
+    private lateinit var myAIClassifier: MyAIClassifier
 
     // Permission request
     private val locationPermissionRequest = registerForActivityResult(
@@ -180,58 +185,64 @@ class HomeFragment : Fragment() {
         savedInstanceState: Bundle?
     ): View {
         _binding = FragmentHomeBinding.inflate(inflater, container, false)
-        val root: View = binding.root
+        val root = binding.root
 
         // Initialize Firebase Auth
         auth = FirebaseAuth.getInstance()
 
-        // Verify user authentication
+        // Check authentication
         if (!isUserAuthenticated()) {
             showAuthenticationRequired()
             return root
         }
 
-        // Location client
+        myAIClassifier = MyAIClassifier(requireContext())
+
+// 🧠 Log to confirm model initialization
+        try {
+            Log.d("MyModel", "Initializing local AI model...")
+            myAIClassifier // This calls your class constructor — if it fails, you'll see it in Logcat
+            Log.d("MyModel", "✅ Model initialized successfully.")
+        } catch (e: Exception) {
+            Log.e("MyModel", "❌ Failed to initialize model: ${e.message}", e)
+        }
+
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(requireActivity())
 
-        // ViewModel setup
+        // ✅ Initialize repositories
         val plantRepository = PlantRepository(BuildConfig.PLANTNET_API_KEY)
         firebaseRepository = FirebaseRepository(requireContext())
+
+        // ✅ ViewModel setup
         val factory = PlantViewModelFactory(plantRepository, firebaseRepository)
-        viewModel = androidx.lifecycle.ViewModelProvider(this, factory)[PlantViewModel::class.java]
+        viewModel = ViewModelProvider(this, factory)[PlantViewModel::class.java]
 
-        firebaseRepository = FirebaseRepository(requireContext())
-
+        // Observe result
         viewModel.result.observe(viewLifecycleOwner) { response ->
-            showResults(response, latestIucnCategory) // pass the category if available
-
+            showResults(response, latestIucnCategory)
             val topSpecies = response?.results?.firstOrNull()?.species?.scientificNameWithoutAuthor
             if (!topSpecies.isNullOrBlank()) {
                 viewModel.fetchIucnStatus(topSpecies)
             }
         }
 
+        // Observe error
         viewModel.error.observe(viewLifecycleOwner) {
             binding.textHome.text = "Error: $it"
             hideLoadingIndicator()
         }
 
-        // Loading state observer
+        // Observe loading
         viewModel.isLoading.observe(viewLifecycleOwner) { isLoading ->
-            if (isLoading) {
-                showLoadingIndicator()
-            } else {
-                hideLoadingIndicator()
-            }
+            if (isLoading) showLoadingIndicator() else hideLoadingIndicator()
         }
 
-        // Loading message observer
+        // Observe loading message
         viewModel.loadingMessage.observe(viewLifecycleOwner) { message ->
-            if (message.isNotEmpty()) {
-                binding.loadingMessage.text = message
-            }
+            if (message.isNotEmpty()) binding.loadingMessage.text = message
         }
 
+        // Restore last image preview
         if (viewModel.lastImageUris.isNotEmpty()) {
             val adapter = ImagePreviewAdapter(viewModel.lastImageUris)
             binding.imageRecyclerView.layoutManager =
@@ -240,10 +251,9 @@ class HomeFragment : Fragment() {
             binding.imageRecyclerView.visibility = View.VISIBLE
         }
 
+        // Observe IUCN status
         viewModel.iucnStatus.observe(viewLifecycleOwner) { category ->
             latestIucnCategory = category
-
-            // Rebuild full result view including the new IUCN info
             showResults(viewModel.result.value, latestIucnCategory)
 
             if (!hasUploadedOnce && viewModel.result.value != null) {
@@ -254,10 +264,10 @@ class HomeFragment : Fragment() {
             }
         }
 
-
         setupUI()
         return root
     }
+
 
     override fun onResume() {
         super.onResume()
@@ -309,8 +319,31 @@ class HomeFragment : Fragment() {
                     MultipartBody.Part.createFormData("organs", "leaf")
                 }
 
-                viewModel.identifyPlant(images = imageParts, organs = organParts, project = "all")
-                hasUploadedOnce = false
+                lifecycleScope.launch {
+                    // Run your custom AI model on the selected images
+                    val localPredictions = myAIClassifier.classifyImages(selectedImageUris)
+
+                    // 🪵 Log model predictions for debugging
+                    if (!localPredictions.isNullOrEmpty()) {
+                        Log.d("MyModel", "Local model predictions:")
+                        localPredictions.forEach { prediction ->
+                            Log.d(
+                                "MyModel",
+                                "🌱 Label: ${prediction.label} | Confidence: ${"%.2f".format(prediction.confidence * 100)}%"
+                            )
+                        }
+                    } else {
+                        Log.d("MyModel", "No predictions returned by the local model.")
+                    }
+
+                    // Store results in ViewModel
+                    viewModel.localPredictions = localPredictions
+
+                    // Now call the PlantNet API
+                    viewModel.identifyPlant(images = imageParts, organs = organParts, project = "all")
+                    hasUploadedOnce = false
+                }
+
             } else {
                 binding.textHome.text = "Please upload at least one image first."
             }
@@ -453,25 +486,46 @@ class HomeFragment : Fragment() {
         response: PlantNetResponse?,
         iucnCategory: String? = null
     ) {
-        // Double-check authentication before upload
-        if (!isUserAuthenticated()) {
+        val TAG = "FirebaseUpload"
+
+        // ✅ 1. Verify authentication
+        val user = FirebaseAuth.getInstance().currentUser
+        if (!isUserAuthenticated() || user == null) {
+            Log.e(TAG, "❌ Upload aborted: user not authenticated.")
             Toast.makeText(requireContext(), "Please log in to upload observations", Toast.LENGTH_LONG).show()
             return
         }
 
-        // Show upload loading indicator
+        // ✅ 2. Log who’s uploading
+        Log.d(TAG, "👤 Authenticated user UID: ${user.uid}")
+        Log.d(TAG, "📧 User email: ${user.email ?: "no email"}")
+
+        // ✅ 3. Show loading UI
         requireActivity().runOnUiThread {
             binding.loadingMessage.text = "Uploading to database..."
             binding.loadingContainer.visibility = View.VISIBLE
         }
 
+// ✅ 4. Log location info — use *your app’s* GeoLocation model
         val geoLocation = currentLocation?.let {
-            GeoLocation(it.latitude, it.longitude)
+            com.example.myPlant.data.model.GeoLocation(
+                lat = it.latitude,
+                lng = it.longitude
+            )
         }
 
-        val smartPlantAISuggestions = emptyList<AISuggestion>() // future AI
+        Log.d(TAG, "📍 GeoLocation: lat=${geoLocation?.lat}, lon=${geoLocation?.lng}")
+
+        val smartPlantAISuggestions = emptyList<AISuggestion>()
 
         try {
+            // ✅ 5. Log what’s being uploaded
+            Log.d(
+                TAG,
+                "🟡 Uploading observation... images=${selectedImageUris.size}, IUCN=$iucnCategory, speciesCount=${response?.results?.size ?: 0}"
+            )
+
+            // 🧩 6. Call repository upload — type now matches correctly
             val id = firebaseRepository.uploadPlantObservation(
                 plantNetResponse = response,
                 smartPlantAISuggestions = smartPlantAISuggestions,
@@ -481,8 +535,11 @@ class HomeFragment : Fragment() {
                 iucnCategory = iucnCategory
             )
 
+            // ✅ 7. Confirm success
             currentObservationId = id
+            Log.d(TAG, "✅ Upload successful! New Firestore document ID: $id")
 
+            // ✅ 8. Build AI suggestion info
             currentAiSuggestions = response?.results?.mapIndexed { index, plantNetResult ->
                 AISuggestion(
                     suggestionId = "plantnet_$index",
@@ -500,15 +557,18 @@ class HomeFragment : Fragment() {
             } ?: emptyList()
 
         } catch (e: Exception) {
+            // ❌ 9. Log full exception with stack trace
+            Log.e(TAG, "❌ Upload failed: ${e.message}", e)
             Toast.makeText(requireContext(), "Upload failed: ${e.message}", Toast.LENGTH_SHORT).show()
         } finally {
-            // Hide loading indicator
+            // ✅ 10. Hide loading UI
             requireActivity().runOnUiThread {
                 binding.loadingContainer.visibility = View.GONE
             }
         }
-
     }
+
+
 
 
     private fun generatePlantId(result: Result): String {
@@ -533,6 +593,18 @@ class HomeFragment : Fragment() {
             sb.append("🎯 Confidence: ${"%.1f".format(confidencePercent)}%\n---\n")
         }
 
+        // 🔹 Add your local model results here
+        val localResults = viewModel.localPredictions
+        if (!localResults.isNullOrEmpty()) {
+            sb.append("\n🤖 My Model Predictions:\n")
+            for (r in localResults.take(3)) {
+                sb.append("🌱 ${r.label} — ${"%.1f".format(r.confidence * 100)}%\n")
+            }
+        } else {
+            sb.append("\n🤖 My Model Predictions:\n")
+            sb.append("🌱 No predictions available.\n")
+        }
+
         currentLocation?.let { location ->
             sb.append("\n📍 Location: ${"%.6f".format(location.latitude)}, ${"%.6f".format(location.longitude)}\n")
         }
@@ -544,6 +616,7 @@ class HomeFragment : Fragment() {
         sb.append("\n\nPlease confirm if the identification is correct or flag for expert review.")
         binding.textHome.text = sb.toString().trim()
     }
+
 
     private fun prepareImagePart(uri: Uri): MultipartBody.Part {
         val context = requireContext()
