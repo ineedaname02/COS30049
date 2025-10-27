@@ -15,6 +15,10 @@ import androidx.navigation.ui.setupActionBarWithNavController
 import androidx.navigation.ui.setupWithNavController
 import androidx.drawerlayout.widget.DrawerLayout
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.view.GravityCompat
+import androidx.navigation.ui.NavigationUI
 import com.example.myPlant.databinding.ActivityMainBinding
 import com.google.firebase.auth.FirebaseAuth
 import com.example.myPlant.ui.home.HomeFragment
@@ -66,6 +70,13 @@ class MainActivity : AppCompatActivity() {
     // ---------------------------
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Apply saved theme before inflating views so UI uses correct colors
+        val userPrefs = UserPreferences(this)
+        when (userPrefs.themeMode) {
+            "dark" -> AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
+            else -> AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
+        }
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
@@ -132,6 +143,25 @@ class MainActivity : AppCompatActivity() {
         setupActionBarWithNavController(navController, appBarConfiguration)
         navView.setupWithNavController(navController)
 
+        // Intercept the Theme menu item to show a selection dialog. Other items
+        // are forwarded to NavigationUI so normal navigation still works.
+        navView.setNavigationItemSelectedListener { menuItem ->
+            when (menuItem.itemId) {
+                R.id.nav_theme -> {
+                    // Close drawer and show theme selector
+                    drawerLayout.closeDrawer(GravityCompat.START)
+                    showThemeSelectionDialog(userPrefs)
+                    true
+                }
+                else -> {
+                    // Let NavigationUI handle navigation item selections
+                    val handled = NavigationUI.onNavDestinationSelected(menuItem, navController)
+                    if (handled) drawerLayout.closeDrawer(GravityCompat.START)
+                    handled
+                }
+            }
+        }
+
         // ---------------------------
         // USER EMAIL DISPLAY IN SIDEBAR
         // ---------------------------
@@ -151,19 +181,44 @@ class MainActivity : AppCompatActivity() {
             userNameTextView?.text = "Welcome Back"
         }
 
-        // ---------------------------
-        // ADMIN MENU VISIBILITY
-        // ---------------------------
-        val navMenu = navView.menu
-        val userPrefs = UserPreferences(this)
-        val role = userPrefs.userRole
-        val isAdmin = role == "admin"
-        navMenu.setGroupVisible(R.id.admin_group, isAdmin)
+    // ---------------------------
+    // ADMIN MENU VISIBILITY
+    // ---------------------------
+    val navMenu = navView.menu
+    val role = userPrefs.userRole
+    val isAdmin = role == "admin"
+    navMenu.setGroupVisible(R.id.admin_group, isAdmin)
     }
 
     // ---------------------------
     // MENU HANDLING
     // ---------------------------
+
+    private fun showThemeSelectionDialog(userPrefs: UserPreferences) {
+        val options = arrayOf("Default", "Dark")
+        val currentIndex = if (userPrefs.themeMode == "dark") 1 else 0
+
+        AlertDialog.Builder(this)
+            .setTitle("Select Theme")
+            .setSingleChoiceItems(options, currentIndex) { dialog, which ->
+                when (which) {
+                    0 -> {
+                        userPrefs.themeMode = "default"
+                        AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
+                    }
+                    1 -> {
+                        userPrefs.themeMode = "dark"
+                        AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
+                    }
+                }
+                dialog.dismiss()
+                // Recreate activity to ensure UI updates to the new theme
+                recreate()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.main, menu)
         return true
