@@ -20,6 +20,7 @@ import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.view.GravityCompat
 import androidx.navigation.ui.NavigationUI
 import com.example.myPlant.databinding.ActivityMainBinding
+import androidx.core.view.WindowCompat
 import com.google.firebase.auth.FirebaseAuth
 import com.example.myPlant.ui.home.HomeFragment
 import com.example.myPlant.data.local.UserPreferences
@@ -80,6 +81,9 @@ class MainActivity : AppCompatActivity() {
 
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+    // Force status bar icons to be light (white) and status bar background to black for the whole app
+    WindowCompat.getInsetsController(window, window.decorView)?.isAppearanceLightStatusBars = false
 
         val auth = FirebaseAuth.getInstance()
         val currentUser = auth.currentUser

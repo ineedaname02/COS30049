@@ -21,7 +21,8 @@
             android:background="@drawable/card_elevated"
             android:padding="24dp"
             android:layout_marginBottom="20dp"
-            android:elevation="4dp">
+            android:elevation="0dp"
+            android:stateListAnimator="@null">
 
             <TextView
                 android:layout_width="wrap_content"
@@ -47,7 +48,8 @@
             android:layout_height="wrap_content"
             android:layout_marginBottom="20dp"
             app:cardCornerRadius="16dp"
-            app:cardElevation="6dp"
+            app:cardElevation="0dp"
+            android:stateListAnimator="@null"
             app:cardBackgroundColor="@color/surface_light">
 
             <LinearLayout
@@ -108,7 +110,8 @@
             android:layout_height="wrap_content"
             android:layout_marginBottom="20dp"
             app:cardCornerRadius="16dp"
-            app:cardElevation="6dp"
+            app:cardElevation="0dp"
+            android:stateListAnimator="@null"
             app:cardBackgroundColor="@color/surface_light">
 
             <LinearLayout
@@ -198,7 +201,8 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             app:cardCornerRadius="16dp"
-            app:cardElevation="6dp"
+            app:cardElevation="0dp"
+            android:stateListAnimator="@null"
             app:cardBackgroundColor="@color/surface_light">
 
             <LinearLayout
@@ -278,7 +282,7 @@
                         android:inputType="textMultiLine"
                         android:lines="3"
                         android:gravity="top|start"
-                        android:textColor="@color/text_white"
+                        android:textColor="@color/primary_green"
                         android:textColorHint="@color/text_hint" />
 
                 </com.google.android.material.textfield.TextInputLayout>

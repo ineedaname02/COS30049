@@ -95,6 +95,9 @@ class HomeFragment : Fragment() {
             binding.imageRecyclerView.layoutManager =
                 LinearLayoutManager(requireContext(), LinearLayoutManager.HORIZONTAL, false)
 
+            // Make preview visible when images are selected
+            binding.imageRecyclerView.visibility = View.VISIBLE
+
             binding.textHome.text = "Selected ${selectedImageUris.size} image(s)"
             requestLocationPermission()
         }
@@ -127,6 +130,9 @@ class HomeFragment : Fragment() {
             binding.imageRecyclerView.adapter = adapter
             binding.imageRecyclerView.layoutManager =
                 LinearLayoutManager(requireContext(), LinearLayoutManager.HORIZONTAL, false)
+
+            // Show the preview bar when a photo is taken
+            binding.imageRecyclerView.visibility = View.VISIBLE
 
             binding.textHome.text = "Selected ${selectedImageUris.size} image(s)"
 
@@ -231,6 +237,7 @@ class HomeFragment : Fragment() {
             binding.imageRecyclerView.layoutManager =
                 LinearLayoutManager(requireContext(), LinearLayoutManager.HORIZONTAL, false)
             binding.imageRecyclerView.adapter = adapter
+            binding.imageRecyclerView.visibility = View.VISIBLE
         }
 
         viewModel.iucnStatus.observe(viewLifecycleOwner) { category ->
@@ -290,6 +297,9 @@ class HomeFragment : Fragment() {
                 // Set up adapter
                 val adapter = ImagePreviewAdapter(selectedImageUris)
                 binding.imageRecyclerView.adapter = adapter
+
+                // Ensure preview is visible while sending/uploading
+                binding.imageRecyclerView.visibility = View.VISIBLE
 
                 // Store in ViewModel for restoration
                 viewModel.lastImageUris = selectedImageUris
@@ -567,6 +577,7 @@ class HomeFragment : Fragment() {
         currentLocation = null
         binding.imageRecyclerView.adapter = null
         binding.imageRecyclerView.layoutManager = null
+        binding.imageRecyclerView.visibility = View.GONE
         binding.textHome.text = "Upload plant images for identification"
     }
 
