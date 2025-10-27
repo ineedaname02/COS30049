@@ -1,75 +1,72 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/scroll"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:padding="16dp">
+    android:orientation="vertical"
+    android:background="@color/background_light"
+    android:padding="40dp">
 
-    <LinearLayout
+    <TextView
+        android:id="@+id/tvDashboardTitle"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="IoT Dashboard"
+        android:textSize="24sp"
+        android:textColor="@color/text_primary"
+        android:textStyle="bold"
+        android:layout_gravity="center"
+        android:paddingBottom="16dp" />
+
+    <androidx.cardview.widget.CardView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical">
+        app:cardElevation="6dp"
+        app:cardBackgroundColor="@color/surface_light"
+        android:layout_marginBottom="20dp">
 
-        <TextView
-            android:id="@+id/textTitle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Device: --"
-            android:textSize="20sp"
-            android:textStyle="bold"/>
-
-        <TextView
-            android:id="@+id/textTimestamp"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Last updated: --"
-            android:layout_marginTop="8dp"/>
-
-        <View
+        <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="12dp" />
-
-        <TextView
-            android:id="@+id/textTemperature"
-            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Temperature: -- °C"
-            android:textSize="18sp"/>
+            android:padding="16dp"
+            android:orientation="vertical">
 
-        <TextView
-            android:id="@+id/textHumidity"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Humidity: -- %"
-            android:textSize="18sp"/>
+            <TextView
+                android:id="@+id/tvPlantStatus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Current Plant Status"
+                android:textSize="18sp"
+                android:textColor="@color/text_primary"
+                android:textStyle="bold" />
 
-        <TextView
-            android:id="@+id/textMoisture"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Moisture: --"
-            android:textSize="18sp"/>
+            <TextView
+                android:id="@+id/tvSensorReading"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Moisture: 45% | Temp: 26°C"
+                android:textSize="16sp"
+                android:textColor="@color/text_secondary"
+                android:layout_marginTop="6dp" />
 
-        <TextView
-            android:id="@+id/textRain"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Rain: --"
-            android:textSize="18sp"/>
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
 
-        <TextView
-            android:id="@+id/textSound"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Sound: --"
-            android:textSize="18sp"/>
+    <Button
+        android:id="@+id/btnViewHistory"
+        android:layout_width="match_parent"
+        android:layout_height="50dp"
+        android:text="View History"
+        android:textColor="@color/text_white"
+        android:backgroundTint="@color/primary_green"
+        android:layout_marginBottom="12dp" />
 
-        <Button
-            android:id="@+id/btnViewHistory"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="View History"
-            android:layout_marginTop="20dp" />
+    <Button
+        android:id="@+id/btnRefreshData"
+        android:layout_width="match_parent"
+        android:layout_height="50dp"
+        android:text="Refresh Data"
+        android:textColor="@color/text_white"
+        android:backgroundTint="@color/accent_blue" />
 
-    </LinearLayout>
-</ScrollView>
+</LinearLayout>

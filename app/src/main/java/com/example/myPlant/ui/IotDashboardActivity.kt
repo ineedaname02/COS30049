@@ -12,14 +12,9 @@ import com.google.firebase.firestore.Query
 class IotDashboardActivity : AppCompatActivity() {
 
     private lateinit var db: FirebaseFirestore
-
-    private lateinit var textTemperature: TextView
-    private lateinit var textHumidity: TextView
-    private lateinit var textMoisture: TextView
-    private lateinit var textRain: TextView
-    private lateinit var textSound: TextView
-    private lateinit var textTimestamp: TextView
+    private lateinit var tvSensorReading: TextView
     private lateinit var btnViewHistory: Button
+    private lateinit var btnRefreshData: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -27,47 +22,51 @@ class IotDashboardActivity : AppCompatActivity() {
 
         db = FirebaseFirestore.getInstance()
 
-        textTemperature = findViewById(R.id.textTemperature)
-        textHumidity = findViewById(R.id.textHumidity)
-        textMoisture = findViewById(R.id.textMoisture)
-        textRain = findViewById(R.id.textRain)
-        textSound = findViewById(R.id.textSound)
-        textTimestamp = findViewById(R.id.textTimestamp)
+        tvSensorReading = findViewById(R.id.tvSensorReading)
         btnViewHistory = findViewById(R.id.btnViewHistory)
+        btnRefreshData = findViewById(R.id.btnRefreshData)
 
-        listenToRealtimeData()
+        loadLatestReading()
 
         btnViewHistory.setOnClickListener {
             startActivity(Intent(this, HistoryActivity::class.java))
         }
+
+        btnRefreshData.setOnClickListener {
+            loadLatestReading()
+        }
     }
 
-    private fun listenToRealtimeData() {
+    private fun loadLatestReading() {
         db.collection("readings")
             .orderBy("timestamp", Query.Direction.DESCENDING)
             .limit(1)
-            .addSnapshotListener { snapshot, error ->
-                if (error != null) {
-                    textTimestamp.text = "Error: ${error.message}"
-                    return@addSnapshotListener
-                }
+            .get()
+            .addOnSuccessListener { snapshot ->
+                if (!snapshot.isEmpty) {
+                    val doc = snapshot.documents[0]
 
-                if (snapshot != null && !snapshot.isEmpty) {
-                    val data = snapshot.documents[0]
-                    val temp = data.getDouble("temperature") ?: 0.0
-                    val humidity = data.getDouble("humidity") ?: 0.0
-                    val moisture = data.getDouble("moisture") ?: 0.0
-                    val rain = data.getLong("rain") ?: 0
-                    val sound = data.getLong("sound") ?: 0
-                    val timestamp = data.getString("timestamp") ?: "--"
+                    val temp = doc.getDouble("temperature") ?: 0.0
+                    val humidity = doc.getDouble("humidity") ?: 0.0
+                    val moisture = doc.getDouble("moisture") ?: 0.0
+                    val rain = doc.getLong("rain") ?: 0
+                    val sound = doc.getLong("sound") ?: 0
+                    val timestamp = doc.getString("timestamp") ?: "--"
 
-                    textTemperature.text = "Temperature: $temp °C"
-                    textHumidity.text = "Humidity: $humidity %"
-                    textMoisture.text = "Moisture: $moisture"
-                    textRain.text = "Rain: $rain"
-                    textSound.text = "Sound: $sound"
-                    textTimestamp.text = "Last updated: $timestamp"
+                    tvSensorReading.text = """
+                        Temperature: $temp °C
+                        Humidity: $humidity %
+                        Moisture: $moisture
+                        Rain: $rain
+                        Sound: $sound
+                        Updated: $timestamp
+                    """.trimIndent()
+                } else {
+                    tvSensorReading.text = "No data available"
                 }
+            }
+            .addOnFailureListener {
+                tvSensorReading.text = "Error loading data"
             }
     }
 }
