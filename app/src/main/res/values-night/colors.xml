@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark theme color overrides -->
+    <color name="primary_green">#FF81C784</color>
+    <color name="primary_green_dark">#FF388E3C</color>
+    <color name="primary_green_light">#FFA5D6A7</color>
+
+    <color name="accent_blue">#FF90CAF9</color>
+    <color name="accent_blue_dark">#FF1976D2</color>
+    <color name="accent_blue_light">#FFBBDEFB</color>
+
+    <!-- Background / Surface -->
+    <color name="background_light">#FF121212</color>
+    <color name="background_white">#FF121212</color>
+    <color name="surface_light">#FF1E1E1E</color>
+    <color name="surface_dark">#FF121212</color>
+    <color name="surface_grey">#FF1C1C1C</color>
+
+    <!-- Text Colors -->
+    <color name="text_primary">#FFFFFFFF</color>
+    <color name="text_secondary">#FFB0B0B0</color>
+    <color name="text_hint">#FF9E9E9E</color>
+    <color name="text_white">#FFFFFFFF</color>
+    <color name="text_disabled">#FF757575</color>
+
+    <!-- Status Colors (kept similar but slightly adjusted for dark background) -->
+    <color name="success_green">#FF66BB6A</color>
+    <color name="warning_orange">#FFFFA726</color>
+    <color name="error_red">#FFEF5350</color>
+    <color name="info_blue">#FF64B5F6</color>
+
+    <!-- Border Colors -->
+    <color name="border_light">#FF2C2C2C</color>
+    <color name="border_medium">#FF424242</color>
+    <color name="border_dark">#FF616161</color>
+</resources>
