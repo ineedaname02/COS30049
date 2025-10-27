@@ -37,6 +37,7 @@ import okhttp3.RequestBody.Companion.asRequestBody
 import java.io.File
 import java.io.FileOutputStream
 
+
 class HomeFragment : Fragment() {
 
     private var _binding: FragmentHomeBinding? = null
@@ -475,25 +476,46 @@ class HomeFragment : Fragment() {
         response: PlantNetResponse?,
         iucnCategory: String? = null
     ) {
-        // Double-check authentication before upload
-        if (!isUserAuthenticated()) {
+        val TAG = "FirebaseUpload"
+
+        // ✅ 1. Verify authentication
+        val user = FirebaseAuth.getInstance().currentUser
+        if (!isUserAuthenticated() || user == null) {
+            Log.e(TAG, "❌ Upload aborted: user not authenticated.")
             Toast.makeText(requireContext(), "Please log in to upload observations", Toast.LENGTH_LONG).show()
             return
         }
 
-        // Show upload loading indicator
+        // ✅ 2. Log who’s uploading
+        Log.d(TAG, "👤 Authenticated user UID: ${user.uid}")
+        Log.d(TAG, "📧 User email: ${user.email ?: "no email"}")
+
+        // ✅ 3. Show loading UI
         requireActivity().runOnUiThread {
             binding.loadingMessage.text = "Uploading to database..."
             binding.loadingContainer.visibility = View.VISIBLE
         }
 
+// ✅ 4. Log location info — use *your app’s* GeoLocation model
         val geoLocation = currentLocation?.let {
-            GeoLocation(it.latitude, it.longitude)
+            com.example.myPlant.data.model.GeoLocation(
+                lat = it.latitude,
+                lng = it.longitude
+            )
         }
 
-        val smartPlantAISuggestions = emptyList<AISuggestion>() // future AI
+        Log.d(TAG, "📍 GeoLocation: lat=${geoLocation?.lat}, lon=${geoLocation?.lng}")
+
+        val smartPlantAISuggestions = emptyList<AISuggestion>()
 
         try {
+            // ✅ 5. Log what’s being uploaded
+            Log.d(
+                TAG,
+                "🟡 Uploading observation... images=${selectedImageUris.size}, IUCN=$iucnCategory, speciesCount=${response?.results?.size ?: 0}"
+            )
+
+            // 🧩 6. Call repository upload — type now matches correctly
             val id = firebaseRepository.uploadPlantObservation(
                 plantNetResponse = response,
                 smartPlantAISuggestions = smartPlantAISuggestions,
@@ -503,8 +525,11 @@ class HomeFragment : Fragment() {
                 iucnCategory = iucnCategory
             )
 
+            // ✅ 7. Confirm success
             currentObservationId = id
+            Log.d(TAG, "✅ Upload successful! New Firestore document ID: $id")
 
+            // ✅ 8. Build AI suggestion info
             currentAiSuggestions = response?.results?.mapIndexed { index, plantNetResult ->
                 AISuggestion(
                     suggestionId = "plantnet_$index",
@@ -522,15 +547,18 @@ class HomeFragment : Fragment() {
             } ?: emptyList()
 
         } catch (e: Exception) {
+            // ❌ 9. Log full exception with stack trace
+            Log.e(TAG, "❌ Upload failed: ${e.message}", e)
             Toast.makeText(requireContext(), "Upload failed: ${e.message}", Toast.LENGTH_SHORT).show()
         } finally {
-            // Hide loading indicator
+            // ✅ 10. Hide loading UI
             requireActivity().runOnUiThread {
                 binding.loadingContainer.visibility = View.GONE
             }
         }
-
     }
+
+
 
 
     private fun generatePlantId(result: Result): String {
