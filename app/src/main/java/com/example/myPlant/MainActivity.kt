@@ -1,127 +1,56 @@
 package com.example.myPlant
 
-import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Bitmap
-import android.location.Location
 import android.os.Bundle
 import android.provider.MediaStore
+import android.view.Menu
 import android.widget.Toast
-import androidx.appcompat.app.AppCompatActivity
-import androidx.drawerlayout.widget.DrawerLayout
+import com.google.android.material.snackbar.Snackbar
+import com.google.android.material.navigation.NavigationView
 import androidx.navigation.findNavController
 import androidx.navigation.ui.AppBarConfiguration
 import androidx.navigation.ui.navigateUp
 import androidx.navigation.ui.setupActionBarWithNavController
 import androidx.navigation.ui.setupWithNavController
-import com.example.myPlant.data.local.UserPreferences
+import androidx.drawerlayout.widget.DrawerLayout
+import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.view.GravityCompat
+import androidx.navigation.ui.NavigationUI
 import com.example.myPlant.databinding.ActivityMainBinding
-import com.example.myPlant.ui.home.HomeFragment
-import com.google.android.gms.location.FusedLocationProviderClient
-import com.google.android.gms.location.LocationServices
-import com.google.android.material.navigation.NavigationView
-import com.google.android.material.snackbar.Snackbar
 import com.google.firebase.auth.FirebaseAuth
-import kotlin.math.min
+import com.example.myPlant.ui.home.HomeFragment
+import com.example.myPlant.data.local.UserPreferences
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var appBarConfiguration: AppBarConfiguration
     private lateinit var binding: ActivityMainBinding
 
-    // Location & Camera
-    private lateinit var fusedLocationClient: FusedLocationProviderClient
-    private var lastKnownLocation: Location? = null
-
-    companion object {
-        private const val CAMERA_REQUEST_CODE = 1001
-        private const val LOCATION_REQUEST_CODE = 1002
-    }
-
     // ---------------------------
-    // CAMERA + LOCATION HANDLING
+    // CAMERA PERMISSION HANDLING
     // ---------------------------
-    private fun checkPermissionsAndLaunchCamera() {
-        val cameraPermission = Manifest.permission.CAMERA
-        val locationPermission = Manifest.permission.ACCESS_FINE_LOCATION
+    private fun checkCameraPermissionAndLaunch() {
+        val cameraPermission = android.Manifest.permission.CAMERA
 
-        when {
-            checkSelfPermission(cameraPermission) != PackageManager.PERMISSION_GRANTED -> {
-                requestPermissions(arrayOf(cameraPermission), CAMERA_REQUEST_CODE)
-            }
-            checkSelfPermission(locationPermission) != PackageManager.PERMISSION_GRANTED -> {
-                requestPermissions(arrayOf(locationPermission), LOCATION_REQUEST_CODE)
-            }
-            else -> {
-                checkLocationEnabledAndLaunchCamera()
-            }
-        }
-    }
-
-    private fun checkLocationEnabledAndLaunchCamera() {
-        val locationManager = getSystemService(android.location.LocationManager::class.java)
-        val isLocationEnabled =
-            locationManager.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER) ||
-                    locationManager.isProviderEnabled(android.location.LocationManager.NETWORK_PROVIDER)
-
-        if (!isLocationEnabled) {
-            Toast.makeText(this, "Enable location before using the camera.", Toast.LENGTH_LONG).show()
+        if (checkSelfPermission(cameraPermission) == PackageManager.PERMISSION_GRANTED) {
+            openCamera()
         } else {
-            getCurrentLocationAndLaunchCamera()
-        }
-    }
-
-    private fun getCurrentLocationAndLaunchCamera() {
-        fusedLocationClient.lastLocation.addOnSuccessListener { location ->
-            if (location != null) {
-                lastKnownLocation = location
-                openCamera()
-            } else {
-                Toast.makeText(this, "Unable to get location.", Toast.LENGTH_SHORT).show()
-            }
+            requestPermissions(arrayOf(cameraPermission), 1001)
         }
     }
 
     private fun openCamera() {
         val cameraIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
         if (cameraIntent.resolveActivity(packageManager) != null) {
-            startActivityForResult(cameraIntent, CAMERA_REQUEST_CODE)
+            startActivity(cameraIntent)
         } else {
             Toast.makeText(this, "No camera app found", Toast.LENGTH_SHORT).show()
         }
     }
 
-    @Deprecated("Deprecated in Java")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == CAMERA_REQUEST_CODE && resultCode == RESULT_OK) {
-            val imageBitmap = data?.extras?.get("data") as? Bitmap
-            imageBitmap?.let {
-                val squareImage = cropToSquare(it)
-
-                // You can now pass this cropped image and location metadata to your HomeFragment or ViewModel
-                val lat = lastKnownLocation?.latitude
-                val lon = lastKnownLocation?.longitude
-                Toast.makeText(
-                    this,
-                    "Photo captured (1:1) at location: $lat, $lon",
-                    Toast.LENGTH_SHORT
-                ).show()
-            }
-        }
-    }
-
-    private fun cropToSquare(bitmap: Bitmap): Bitmap {
-        val dimension = min(bitmap.width, bitmap.height)
-        val xOffset = (bitmap.width - dimension) / 2
-        val yOffset = (bitmap.height - dimension) / 2
-        return Bitmap.createBitmap(bitmap, xOffset, yOffset, dimension, dimension)
-    }
-
-    // ---------------------------
-    // PERMISSIONS RESULT
-    // ---------------------------
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<out String>,
@@ -129,14 +58,10 @@ class MainActivity : AppCompatActivity() {
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
 
-        if (grantResults.isEmpty() || grantResults[0] != PackageManager.PERMISSION_GRANTED) {
-            Toast.makeText(this, "Permission denied.", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        when (requestCode) {
-            CAMERA_REQUEST_CODE -> checkPermissionsAndLaunchCamera()
-            LOCATION_REQUEST_CODE -> checkPermissionsAndLaunchCamera()
+        if (requestCode == 1001 && grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            openCamera()
+        } else {
+            Toast.makeText(this, "Camera permission denied", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -145,14 +70,21 @@ class MainActivity : AppCompatActivity() {
     // ---------------------------
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // Apply saved theme before inflating views so UI uses correct colors
+        val userPrefs = UserPreferences(this)
+        when (userPrefs.themeMode) {
+            "dark" -> AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
+            else -> AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
+        }
+
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
-
-        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
         val auth = FirebaseAuth.getInstance()
         val currentUser = auth.currentUser
         if (currentUser == null) {
+            // User not logged in → go to Login
             startActivity(Intent(this, LoginActivity::class.java))
             finish()
             return
@@ -160,29 +92,33 @@ class MainActivity : AppCompatActivity() {
 
         setSupportActionBar(binding.appBarMain.toolbar)
 
-        // Default FAB message
+        // Default FAB message when not overridden by HomeFragment
         binding.appBarMain.fab.setOnClickListener { view ->
             Snackbar.make(view, "Identify a plant from the Home screen.", Snackbar.LENGTH_LONG)
                 .setAnchorView(R.id.fab)
-                .show()
+                .setAction("Action", null).show()
         }
 
         val drawerLayout: DrawerLayout = binding.drawerLayout
         val navView: NavigationView = binding.navView
         val navController = findNavController(R.id.nav_host_fragment_content_main)
 
-        // FAB behavior by screen
+        // ---------------------------
+        // FAB Visibility by Destination
+        // ---------------------------
         navController.addOnDestinationChangedListener { _, destination, _ ->
             if (destination.id == R.id.nav_home) {
                 binding.appBarMain.fab.show()
                 binding.appBarMain.fab.setOnClickListener {
-                    checkPermissionsAndLaunchCamera()
+                    val navHostFragment = supportFragmentManager.findFragmentById(R.id.nav_host_fragment_content_main)
+                    val homeFragment = navHostFragment?.childFragmentManager?.fragments
+                        ?.firstOrNull { it is HomeFragment } as? HomeFragment
+                    homeFragment?.launchCamera()
                 }
             } else {
                 binding.appBarMain.fab.hide()
             }
-
-            // Logout
+            // ✅ HANDLE LOGOUT HERE
             if (destination.id == R.id.nav_logout) {
                 FirebaseAuth.getInstance().signOut()
                 startActivity(Intent(this, LoginActivity::class.java))
@@ -190,7 +126,9 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        // Navigation setup
+        // ---------------------------
+        // NAVIGATION SETUP
+        // ---------------------------
         appBarConfiguration = AppBarConfiguration(
             setOf(
                 R.id.nav_home,
@@ -198,30 +136,92 @@ class MainActivity : AppCompatActivity() {
                 R.id.nav_slideshow,
                 R.id.nav_history,
                 R.id.nav_admin_dashboard,
-                R.id.nav_plant_location_map
+                R.id.nav_plant_location_map  // ✅ Added plant location map
             ), drawerLayout
         )
 
         setupActionBarWithNavController(navController, appBarConfiguration)
         navView.setupWithNavController(navController)
 
-        // Sidebar user info
+        // Intercept the Theme menu item to show a selection dialog. Other items
+        // are forwarded to NavigationUI so normal navigation still works.
+        navView.setNavigationItemSelectedListener { menuItem ->
+            when (menuItem.itemId) {
+                R.id.nav_theme -> {
+                    // Close drawer and show theme selector
+                    drawerLayout.closeDrawer(GravityCompat.START)
+                    showThemeSelectionDialog(userPrefs)
+                    true
+                }
+                else -> {
+                    // Let NavigationUI handle navigation item selections
+                    val handled = NavigationUI.onNavDestinationSelected(menuItem, navController)
+                    if (handled) drawerLayout.closeDrawer(GravityCompat.START)
+                    handled
+                }
+            }
+        }
+
+        // ---------------------------
+        // USER EMAIL DISPLAY IN SIDEBAR
+        // ---------------------------
         val headerView = navView.getHeaderView(0)
         val userEmailTextView = headerView.findViewById<android.widget.TextView>(R.id.nav_header_user_email)
         val userNameTextView = headerView.findViewById<android.widget.TextView>(R.id.nav_header_user_name)
-
-        currentUser?.email?.let { email -> userEmailTextView?.text = email }
+        
+        // Set user email from Firebase Auth
+        currentUser?.email?.let { email ->
+            userEmailTextView?.text = email
+        }
+        
+        // Set user name (you can customize this based on your user data)
         currentUser?.displayName?.let { displayName ->
             userNameTextView?.text = "Welcome, $displayName"
         } ?: run {
             userNameTextView?.text = "Welcome Back"
         }
 
-        // Admin-only menu
-        val navMenu = navView.menu
-        val userPrefs = UserPreferences(this)
-        val isAdmin = userPrefs.userRole == "admin"
-        navMenu.setGroupVisible(R.id.admin_group, isAdmin)
+    // ---------------------------
+    // ADMIN MENU VISIBILITY
+    // ---------------------------
+    val navMenu = navView.menu
+    val role = userPrefs.userRole
+    val isAdmin = role == "admin"
+    navMenu.setGroupVisible(R.id.admin_group, isAdmin)
+    }
+
+    // ---------------------------
+    // MENU HANDLING
+    // ---------------------------
+
+    private fun showThemeSelectionDialog(userPrefs: UserPreferences) {
+        val options = arrayOf("Default", "Dark")
+        val currentIndex = if (userPrefs.themeMode == "dark") 1 else 0
+
+        AlertDialog.Builder(this)
+            .setTitle("Select Theme")
+            .setSingleChoiceItems(options, currentIndex) { dialog, which ->
+                when (which) {
+                    0 -> {
+                        userPrefs.themeMode = "default"
+                        AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_NO)
+                    }
+                    1 -> {
+                        userPrefs.themeMode = "dark"
+                        AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
+                    }
+                }
+                dialog.dismiss()
+                // Recreate activity to ensure UI updates to the new theme
+                recreate()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
+    }
+
+    override fun onCreateOptionsMenu(menu: Menu): Boolean {
+        menuInflater.inflate(R.menu.main, menu)
+        return true
     }
 
     override fun onSupportNavigateUp(): Boolean {
