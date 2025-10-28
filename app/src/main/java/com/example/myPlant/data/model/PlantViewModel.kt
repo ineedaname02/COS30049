@@ -1,14 +1,13 @@
 package com.example.myPlant.data.model
 
+import android.net.Uri
 import androidx.lifecycle.*
-
-import com.example.myPlant.data.repository.PlantRepository
 import com.example.myPlant.data.repository.FirebaseRepository
+import com.example.myPlant.data.repository.PlantRepository
+import com.example.myPlant.ml.ClassificationResult
+import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.launch
 import okhttp3.MultipartBody
-import android.net.Uri
-import com.google.firebase.auth.FirebaseAuth
-import com.example.myPlant.ml.ClassificationResult
 
 class PlantViewModel(
     private val plantRepository: PlantRepository,
@@ -17,22 +16,60 @@ class PlantViewModel(
 
     private val _result = MutableLiveData<PlantNetResponse?>()
     val result: LiveData<PlantNetResponse?> = _result
-
     private val _error = MutableLiveData<String?>()
     val error: LiveData<String?> = _error
-
     private val _isLoading = MutableLiveData<Boolean>()
     val isLoading: LiveData<Boolean> = _isLoading
-
     private val _loadingMessage = MutableLiveData<String>()
     val loadingMessage: LiveData<String> = _loadingMessage
-
     var lastImageUris: List<Uri> = emptyList()
-
-    private val _allObservations = MutableLiveData<List<Observation>>()
-    val allObservations: LiveData<List<Observation>> = _allObservations
-
     var localPredictions: List<ClassificationResult>? = null
+    private val _iucnStatus = MutableLiveData<String?>()
+    val iucnStatus: LiveData<String?> = _iucnStatus
+
+    // ✅ --- NEW CACHE-AWARE OBSERVATION LOGIC ---
+
+    // The UI will observe this LiveData, which comes directly from the Room cache.
+    val allObservations: LiveData<List<Observation>> = firebaseRepository.getAllObservations()
+
+    // The UI will also observe this, which is also from the Room cache.
+    val userObservations: LiveData<List<Observation>> =
+        MutableLiveData(FirebaseAuth.getInstance().currentUser?.uid).switchMap { userId ->
+            if (userId != null) {
+                firebaseRepository.getUserObservations(userId)
+            } else {
+                // Return empty LiveData if user is not logged in
+                MutableLiveData(emptyList())
+            }
+        }
+
+    /**
+     * This function now only needs to trigger the background refresh.
+     * The UI will update automatically when the cache is updated.
+     */
+    fun loadAllObservations() {
+        viewModelScope.launch {
+            _isLoading.value = true
+            _loadingMessage.value = "Fetching latest plant locations..."
+            firebaseRepository.refreshAllObservations() // Triggers Firebase fetch and cache update
+            _isLoading.value = false
+            _loadingMessage.value = ""
+        }
+    }
+
+    /**
+     * This also only needs to trigger the background refresh for the user.
+     */
+    fun loadUserObservations() {
+        val userId = FirebaseAuth.getInstance().currentUser?.uid ?: return
+        viewModelScope.launch {
+            _isLoading.value = true
+            _loadingMessage.value = "Fetching your latest observations..."
+            firebaseRepository.refreshUserObservations(userId) // Triggers user-specific fetch
+            _isLoading.value = false
+            _loadingMessage.value = ""
+        }
+    }
 
     fun identifyPlant(
         images: List<MultipartBody.Part>,
@@ -43,9 +80,9 @@ class PlantViewModel(
             try {
                 _isLoading.value = true
                 _loadingMessage.value = "Analyzing plant images..."
-                
+
                 val response = plantRepository.identifyPlant(images, organs, project) //repository
-                
+
                 if (response.isSuccessful) {
                     _loadingMessage.value = "Processing results..."
                     _result.value = response.body()
@@ -61,9 +98,6 @@ class PlantViewModel(
         }
     }
 
-    private val _iucnStatus = MutableLiveData<String?>()
-    val iucnStatus: LiveData<String?> = _iucnStatus
-
     fun fetchIucnStatus(scientificName: String) {
         viewModelScope.launch {
             try {
@@ -77,48 +111,4 @@ class PlantViewModel(
             }
         }
     }
-
-    fun loadAllObservations() {
-        viewModelScope.launch {
-            _isLoading.value = true
-            _loadingMessage.value = "Fetching all plant locations..."
-            try {
-                // ✅ Directly and safely use the firebaseRepository
-                val observations = firebaseRepository.getAllObservations()
-                _allObservations.value = observations
-            } catch (e: Exception) {
-                _error.value = "Error fetching observations: ${e.message}"
-            } finally {
-                _isLoading.value = false
-                _loadingMessage.value = ""
-            }
-        }
-    }
-
-    // ✅ ADD THIS FOR THE USER'S HISTORY MAP
-    private val _userObservations = MutableLiveData<List<Observation>>()
-    val userObservations: LiveData<List<Observation>> = _userObservations
-    fun loadUserObservations() {
-        val userId = FirebaseAuth.getInstance().currentUser?.uid
-        if (userId == null) {
-            _error.value = "User not authenticated."
-            return
-        }
-
-        viewModelScope.launch {
-            _isLoading.value = true
-            _loadingMessage.value = "Fetching your observations..."
-            try {
-                // This calls the new function we will add to the repository
-                val observations = firebaseRepository.getFullUserObservations(userId)
-                _userObservations.value = observations
-            } catch (e: Exception) {
-                _error.value = "Error fetching your observations: ${e.message}"
-            } finally {
-                _isLoading.value = false
-                _loadingMessage.value = ""
-            }
-        }
-    }
-
 }
