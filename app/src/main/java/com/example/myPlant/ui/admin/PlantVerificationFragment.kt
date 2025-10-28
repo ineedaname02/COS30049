@@ -10,9 +10,8 @@ import androidx.fragment.app.viewModels
 import androidx.lifecycle.Observer
 import com.bumptech.glide.Glide
 import com.example.myPlant.R
+import com.example.myPlant.data.model.PlantObservation
 import com.google.firebase.auth.FirebaseAuth
-import com.example.myPlant.data.model.Observation
-
 
 class PlantVerificationFragment : Fragment() {
 
@@ -34,8 +33,10 @@ class PlantVerificationFragment : Fragment() {
     private lateinit var progress: ProgressBar
 
     // --- Data holders ---
-    private var pendingList: MutableList<Observation> = mutableListOf()
+    private var pendingList: MutableList<PlantObservation> = mutableListOf()
     private var currentIndex = 0
+    private var currentObs: PlantObservation? = null
+    private val adminId get() = FirebaseAuth.getInstance().currentUser?.uid ?: "admin_unknown"
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -103,20 +104,19 @@ class PlantVerificationFragment : Fragment() {
         correctionForm.visibility = View.GONE
     }
 
-    private fun displayObservation(obs: Observation) {
-        tvAiName.text = "AI GIVEN NAME: ${obs.currentIdentification.scientificName}"
-        tvConfidence.text = String.format("Confidence: %.2f", obs.currentIdentification.confidence * 100)
+    private fun displayObservation(obs: PlantObservation) {
+        currentObs = obs
+        tvAiName.text = "AI GIVEN NAME: ${obs.scientificName}"
+        tvConfidence.text = String.format("Confidence: %.2f", obs.confidence)
         tvIucn.text = "IUCN: ${obs.iucnCategory ?: "-"}"
         correctionForm.visibility = View.GONE
         etCorrectedScientific.setText("")
         etCorrectedCommon.setText("")
 
-        val url = obs.plantImageUrls.firstOrNull()
-        if (!url.isNullOrEmpty()) {
-            Glide.with(this).load(url).into(imgObservation)
-        } else {
-            imgObservation.setImageResource(R.drawable.ic_launcher_foreground)
-        }
+        val url = obs.imageUrls.firstOrNull()
+        if (!url.isNullOrEmpty()) Glide.with(this).load(url).into(imgObservation)
+        else imgObservation.setImageResource(R.drawable.ic_launcher_foreground)
+
     }
 
     private fun showCorrectionForm() {
@@ -124,19 +124,19 @@ class PlantVerificationFragment : Fragment() {
     }
 
     private fun onAdminMarkCorrect() {
-        if (pendingList.isEmpty() || currentIndex >= pendingList.size) return
-        val obs = pendingList[currentIndex] // ✅ Get current item from the list
+        val obs = currentObs ?: return
         adminViewModel.processAdminValidation(
-            observationId = obs.observationId, // ✅ Use new property
+            observationId = obs.id,
+            adminId = adminId,
             isCorrect = true
         )
         removeCurrentAndAdvance()
     }
 
     private fun onSubmitCorrection() {
-        if (pendingList.isEmpty() || currentIndex >= pendingList.size) return
-        val obs = pendingList[currentIndex] // ✅ Get current item from the list
+        val obs = currentObs ?: return
         val correctedSci = etCorrectedScientific.text.toString().trim()
+        val correctedCommon = etCorrectedCommon.text.toString().trim().ifEmpty { null }
 
         if (correctedSci.isEmpty()) {
             Toast.makeText(requireContext(), "Please enter corrected scientific name", Toast.LENGTH_SHORT).show()
@@ -144,9 +144,11 @@ class PlantVerificationFragment : Fragment() {
         }
 
         adminViewModel.processAdminValidation(
-            observationId = obs.observationId, // ✅ Use new property
+            observationId = obs.id,
+            adminId = adminId,
             isCorrect = false,
-            correctedScientificName = correctedSci
+            correctedScientificName = correctedSci,
+            correctedCommonName = correctedCommon
         )
         removeCurrentAndAdvance()
     }
@@ -157,11 +159,9 @@ class PlantVerificationFragment : Fragment() {
         }
         if (pendingList.isEmpty()) {
             showEmptyState()
+        } else if (currentIndex >= pendingList.size) {
+            displayObservation(pendingList.last())
         } else {
-            // Ensure index is valid after removal
-            if (currentIndex >= pendingList.size) {
-                currentIndex = pendingList.lastIndex
-            }
             displayObservation(pendingList[currentIndex])
         }
     }
@@ -175,4 +175,3 @@ class PlantVerificationFragment : Fragment() {
         displayObservation(pendingList[currentIndex])
     }
 }
-//

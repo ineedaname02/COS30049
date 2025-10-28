@@ -3,21 +3,18 @@ package com.example.myPlant.data.repository
 import android.content.Context
 import android.net.Uri
 import android.util.Log
-import androidx.lifecycle.LiveData
-import com.example.myPlant.data.local.ObservationDao // ✅ Import DAO
 import com.example.myPlant.data.model.*
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.storage.FirebaseStorage
 import com.google.firebase.Timestamp
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.tasks.await
-import kotlinx.coroutines.withContext
 import java.util.UUID
+import com.google.firebase.firestore.Query
+import kotlinx.coroutines.tasks.await
 
-class FirebaseRepository(private val observationDao: ObservationDao) {
+class FirebaseRepository(private val context: Context) {
 
     private val auth = FirebaseAuth.getInstance()
     private val storage = FirebaseStorage.getInstance()
@@ -27,103 +24,6 @@ class FirebaseRepository(private val observationDao: ObservationDao) {
     private val trainingDataCollection = db.collection("trainingData")
     private val flagQueueCollection = db.collection("flagQueue")
     private val plantsCollection = db.collection("plants")
-
-    /**
-     * Gets all observations.
-     * Returns a LiveData stream directly from the local Room database.
-     * In the background, it fetches fresh data from Firebase and updates the cache.
-     */
-    fun getAllObservations(): LiveData<List<Observation>> {
-        // Immediately return the cached data as LiveData
-        return observationDao.getAllObservations()
-    }
-
-    /**
-     * Fetches fresh data for ALL observations from Firebase and updates the local cache.
-     * This is intended to be called from the ViewModel.
-     */
-    suspend fun refreshAllObservations() {
-        withContext(Dispatchers.IO) {
-            try {
-                Log.d("Cache", "Refreshing all observations from Firebase...")
-                val snapshot = observationsCollection
-                    .orderBy("timestamp", Query.Direction.DESCENDING)
-                    .limit(500) // Limit to a reasonable number for the global map
-                    .get()
-                    .await()
-                val observations = snapshot.toObjects(Observation::class.java)
-
-                // Clear the old cache and insert the new data
-                observationDao.clearAll()
-                observationDao.insertAll(observations)
-                Log.d("Cache", "✅ Successfully cached ${observations.size} global observations.")
-            } catch (e: Exception) {
-                Log.e("Cache", "Error refreshing all observations: ${e.message}", e)
-                // In case of error, the old cached data will remain, which is good for offline mode.
-            }
-        }
-    }
-
-    /**
-     * Gets observations for a specific user.
-     * Returns a LiveData stream directly from the user's data in the local Room database.
-     */
-    fun getUserObservations(userId: String): LiveData<List<Observation>> {
-        return observationDao.getUserObservations(userId)
-    }
-
-    /**
-     * Fetches fresh data for a SPECIFIC USER from Firebase and updates the local cache.
-     */
-    suspend fun refreshUserObservations(userId: String) {
-        withContext(Dispatchers.IO) {
-            try {
-                Log.d("Cache", "Refreshing user observations for $userId from Firebase...")
-                val snapshot = observationsCollection
-                    .whereEqualTo("userId", userId)
-                    .orderBy("timestamp", Query.Direction.DESCENDING)
-                    .limit(200)
-                    .get()
-                    .await()
-                val userObservations = snapshot.toObjects(Observation::class.java)
-
-                // Note: We only clear and update the specific user's data
-                observationDao.clearUserObservations(userId)
-                observationDao.insertAll(userObservations)
-                Log.d("Cache", "✅ Successfully cached ${userObservations.size} observations for user $userId.")
-            } catch (e: Exception) {
-                Log.e("Cache", "Error refreshing user observations: ${e.message}", e)
-            }
-        }
-    }
-
-    suspend fun fetchPendingObservations(limit: Int): List<Observation> {
-        // This is a placeholder. In a real app, you would query your "flagQueue"
-        // or observations where status is "needs_review".
-        Log.d("Admin", "Fetching pending observations (placeholder)...")
-        val snapshot = observationsCollection
-            .whereIn("currentIdentification.status", listOf("needs_review", "ai_suggested"))
-            .orderBy("timestamp", Query.Direction.ASCENDING)
-            .limit(limit.toLong())
-            .get()
-            .await()
-        return snapshot.toObjects(Observation::class.java)
-    }
-
-    suspend fun processAdminValidation(
-        observationId: String,
-        adminId: String,
-        isCorrect: Boolean,
-        correctedScientificName: String?
-    ): Boolean {
-        // This is a placeholder for the real logic.
-        Log.d("Admin", "Processing validation for $observationId (placeholder)...")
-        // In a real implementation you would:
-        // 1. Update the observation's 'currentIdentification' with the admin's input.
-        // 2. Change the status to 'verified' or 'corrected'.
-        // 3. Remove it from the flagQueue.
-        return true // Assume success for now
-    }
 
     /**
      * Upload a new plant observation with AI/PlantNet data and images.
@@ -231,11 +131,7 @@ class FirebaseRepository(private val observationDao: ObservationDao) {
                 Log.d("FlagQueue", "⚠️ Added low-confidence observation $observationId to flagQueue")
             }
         }
-        // After successful upload, you could optionally trigger a refresh
-        val userId = auth.currentUser?.uid
-        if (userId != null) {
-            refreshUserObservations(userId)
-        }
+
         return observationId
     }
 
@@ -428,31 +324,31 @@ class FirebaseRepository(private val observationDao: ObservationDao) {
         }
     }
 
-//    suspend fun getAllObservations(): List<Observation> {
-//        return try {
-//            val snapshot = observationsCollection
-//                .orderBy("timestamp", Query.Direction.DESCENDING) // Get the most recent first
-//                .limit(500) // IMPORTANT: Limit docs to avoid high cost & slow loads
-//                .get()
-//                .await()
-//
-//            // Use Firestore's automatic object mapping to convert documents.
-//            snapshot.toObjects(Observation::class.java)
-//        } catch (e: Exception) {
-//            Log.e("FirebaseRepository", "Error fetching all observations: ${e.message}", e)
-//            emptyList() // Return an empty list on error to prevent crashes
-//        }
-//    }
+    suspend fun getAllObservations(): List<Observation> {
+        return try {
+            val snapshot = observationsCollection
+                .orderBy("timestamp", Query.Direction.DESCENDING) // Get the most recent first
+                .limit(500) // IMPORTANT: Limit docs to avoid high cost & slow loads
+                .get()
+                .await()
+
+            // Use Firestore's automatic object mapping to convert documents.
+            snapshot.toObjects(Observation::class.java)
+        } catch (e: Exception) {
+            Log.e("FirebaseRepository", "Error fetching all observations: ${e.message}", e)
+            emptyList() // Return an empty list on error to prevent crashes
+        }
+    }
 
     // ✅ ADD THIS FOR THE USER'S HISTORY MAP
     suspend fun getFullUserObservations(userId: String): List<Observation> {
         return try {
             val snapshot = observationsCollection
-                .whereEqualTo("userId", userId)
-                .orderBy("timestamp", Query.Direction.DESCENDING)
-                .limit(200) // Limit to user's 200 most recent for performance
-                .get()
-                .await()
+            .whereEqualTo("userId", userId)
+            .orderBy("timestamp", Query.Direction.DESCENDING)
+            .limit(200) // Limit to user's 200 most recent for performance
+            .get()
+            .await()
 
             // This automatically converts documents to the full Observation data class
             snapshot.toObjects(Observation::class.java)
@@ -463,48 +359,48 @@ class FirebaseRepository(private val observationDao: ObservationDao) {
     }
 
     // ✅ Fetch pending observations for admin validation
-//    suspend fun fetchPendingObservations(limit: Int = 30): List<PlantObservation> {
-//        return try {
-//            val snapshot = flagQueueCollection
-//                .whereEqualTo("status", "pending")
-//                .orderBy("flaggedAt", Query.Direction.ASCENDING)
-//                .limit(limit.toLong())
-//                .get()
-//                .await()
-//
-//            val flaggedIds = snapshot.documents.mapNotNull { it.getString("observationId") }
-//            if (flaggedIds.isEmpty()) return emptyList()
-//
-//            val observations = mutableListOf<PlantObservation>()
-//            for (id in flaggedIds) {
-//                val doc = observationsCollection.document(id).get().await()
-//                val data = doc.toObject(Observation::class.java) ?: continue
-//
-//                val current = data.currentIdentification
-//                observations.add(
-//                    PlantObservation(
-//                        id = id,
-//                        scientificName = current?.scientificName ?: "Unknown",
-//                        confidence = current?.confidence ?: 0.0,
-//                        iucnCategory = data.iucnCategory ?: "-",
-//                        imageUrls = data.plantImageUrls
-//                    )
-//                )
-//            }
-//            observations.sortedByDescending {
-//                // Prioritize endangered species first
-//                when (it.iucnCategory?.lowercase()) {
-//                    "critically endangered" -> 3
-//                    "endangered" -> 2
-//                    "vulnerable" -> 1
-//                    else -> 0
-//                }
-//            }
-//        } catch (e: Exception) {
-//            Log.e("FirebaseRepository", "Error fetching pending observations: ${e.message}", e)
-//            emptyList()
-//        }
-//    }
+    suspend fun fetchPendingObservations(limit: Int = 30): List<PlantObservation> {
+        return try {
+            val snapshot = flagQueueCollection
+                .whereEqualTo("status", "pending")
+                .orderBy("flaggedAt", Query.Direction.ASCENDING)
+                .limit(limit.toLong())
+                .get()
+                .await()
+
+            val flaggedIds = snapshot.documents.mapNotNull { it.getString("observationId") }
+            if (flaggedIds.isEmpty()) return emptyList()
+
+            val observations = mutableListOf<PlantObservation>()
+            for (id in flaggedIds) {
+                val doc = observationsCollection.document(id).get().await()
+                val data = doc.toObject(Observation::class.java) ?: continue
+
+                val current = data.currentIdentification
+                observations.add(
+                    PlantObservation(
+                        id = id,
+                        scientificName = current?.scientificName ?: "Unknown",
+                        confidence = current?.confidence ?: 0.0,
+                        iucnCategory = data.iucnCategory ?: "-",
+                        imageUrls = data.plantImageUrls
+                    )
+                )
+            }
+            observations.sortedByDescending {
+                // Prioritize endangered species first
+                when (it.iucnCategory?.lowercase()) {
+                    "critically endangered" -> 3
+                    "endangered" -> 2
+                    "vulnerable" -> 1
+                    else -> 0
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("FirebaseRepository", "Error fetching pending observations: ${e.message}", e)
+            emptyList()
+        }
+    }
 
     // ✅ Process admin validation (correct / wrong)
     // ✅ Improved Admin Validation Process
@@ -613,5 +509,7 @@ class FirebaseRepository(private val observationDao: ObservationDao) {
             Log.e("TrainingData", "❌ Failed to save admin training data: ${e.message}", e)
         }
     }
-    //
+
+
+
 }

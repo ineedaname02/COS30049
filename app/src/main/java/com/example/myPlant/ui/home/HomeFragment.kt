@@ -36,7 +36,7 @@ import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
 import java.io.File
 import java.io.FileOutputStream
-import com.example.myPlant.data.local.AppDatabase
+
 
 class HomeFragment : Fragment() {
 
@@ -178,6 +178,7 @@ class HomeFragment : Fragment() {
         }
     }
 
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -210,12 +211,10 @@ class HomeFragment : Fragment() {
 
         // ✅ Initialize repositories
         val plantRepository = PlantRepository(BuildConfig.PLANTNET_API_KEY)
-
-        val observationDao = AppDatabase.getDatabase(requireContext()).observationDao()
-        firebaseRepository = FirebaseRepository(observationDao)
+        firebaseRepository = FirebaseRepository(requireContext())
 
         // ✅ ViewModel setup
-        val factory = PlantViewModelFactory(plantRepository, firebaseRepository, requireContext()) // ✅ Add context    viewModel = ViewModelProvider(this, factory)[PlantViewModel::class.java]
+        val factory = PlantViewModelFactory(plantRepository, firebaseRepository)
         viewModel = ViewModelProvider(this, factory)[PlantViewModel::class.java]
 
         // Observe result
@@ -676,4 +675,4 @@ class HomeFragment : Fragment() {
         super.onDestroyView()
         _binding = null
     }
-}//
+}

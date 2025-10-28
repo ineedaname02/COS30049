@@ -5,24 +5,17 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.viewModelScope
-import com.example.myPlant.data.local.AppDatabase
-import com.example.myPlant.data.model.Observation
+import com.example.myPlant.data.model.PlantObservation
 import com.example.myPlant.data.repository.FirebaseRepository
 import kotlinx.coroutines.launch
 
 class AdminViewModel(application: Application) : AndroidViewModel(application) {
 
-    // ✅ FIX 1: Correctly declare the repository variable
-    private val repo: FirebaseRepository
+    // Repository requires a Context in your project, so pass the application.
+    private val repo = FirebaseRepository(application)
 
-    init {
-        val observationDao = AppDatabase.getDatabase(application).observationDao()
-        repo = FirebaseRepository(observationDao)
-    }
-
-    // ✅ FIX 2: Change LiveData to use the correct Observation model
-    private val _pendingObservations = MutableLiveData<List<Observation>>(emptyList())
-    val pendingObservations: LiveData<List<Observation>> = _pendingObservations
+    private val _pendingObservations = MutableLiveData<List<PlantObservation>>(emptyList())
+    val pendingObservations: LiveData<List<PlantObservation>> = _pendingObservations
 
     private val _isLoading = MutableLiveData<Boolean>(false)
     val isLoading: LiveData<Boolean> = _isLoading
@@ -34,7 +27,6 @@ class AdminViewModel(application: Application) : AndroidViewModel(application) {
         _isLoading.value = true
         viewModelScope.launch {
             try {
-                // ✅ FIX 3: Call the new placeholder method
                 val list = repo.fetchPendingObservations(limit)
                 _pendingObservations.value = list
                 if (list.isEmpty()) _message.value = "No pending observations."
@@ -48,22 +40,23 @@ class AdminViewModel(application: Application) : AndroidViewModel(application) {
 
     fun processAdminValidation(
         observationId: String,
+        adminId: String,
         isCorrect: Boolean,
-        correctedScientificName: String? = null
+        correctedScientificName: String? = null,
+        correctedCommonName: String? = null
     ) {
-        val adminId = "current_admin_id" // Placeholder for actual admin user ID
         _isLoading.value = true
         viewModelScope.launch {
             try {
-                // ✅ FIX 4: Call the new placeholder method
                 val ok = repo.processAdminValidation(
                     observationId,
                     adminId,
                     isCorrect,
                     correctedScientificName,
+                    correctedCommonName
                 )
                 _message.value = if (ok) "Validation saved successfully." else "Validation failed."
-                fetchPendingObservations() // Refresh the list
+                fetchPendingObservations()
             } catch (e: Exception) {
                 _message.value = "Error: ${e.message}"
             } finally {
