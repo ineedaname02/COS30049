@@ -175,3 +175,4 @@ class PlantVerificationFragment : Fragment() {
         displayObservation(pendingList[currentIndex])
     }
 }
+//

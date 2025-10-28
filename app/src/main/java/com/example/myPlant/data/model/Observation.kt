@@ -47,3 +47,4 @@ data class FlagInfo(
     val assignedAdmin: String? = null,
     val resolution: String? = null
 )
+//

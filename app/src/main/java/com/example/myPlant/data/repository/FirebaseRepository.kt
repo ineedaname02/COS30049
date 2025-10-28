@@ -344,11 +344,11 @@ class FirebaseRepository(private val context: Context) {
     suspend fun getFullUserObservations(userId: String): List<Observation> {
         return try {
             val snapshot = observationsCollection
-            .whereEqualTo("userId", userId)
-            .orderBy("timestamp", Query.Direction.DESCENDING)
-            .limit(200) // Limit to user's 200 most recent for performance
-            .get()
-            .await()
+                .whereEqualTo("userId", userId)
+                .orderBy("timestamp", Query.Direction.DESCENDING)
+                .limit(200) // Limit to user's 200 most recent for performance
+                .get()
+                .await()
 
             // This automatically converts documents to the full Observation data class
             snapshot.toObjects(Observation::class.java)
@@ -509,7 +509,5 @@ class FirebaseRepository(private val context: Context) {
             Log.e("TrainingData", "❌ Failed to save admin training data: ${e.message}", e)
         }
     }
-
-
-
+    //
 }
