@@ -23,6 +23,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 import androidx.navigation.fragment.findNavController
 import com.google.android.gms.maps.MapsInitializer
+import com.example.myPlant.data.local.AppDatabase
 
 class PlantLocationMapFragment : Fragment(), OnMapReadyCallback {
 
@@ -32,11 +33,11 @@ class PlantLocationMapFragment : Fragment(), OnMapReadyCallback {
     private var isMapReady = false
     private var heatmapOverlay: TileOverlay? = null
 
-    private val viewModel: PlantViewModel by activityViewModels {
-        PlantViewModelFactory(
-            plantRepository = PlantRepository(BuildConfig.PLANTNET_API_KEY),
-            firebaseRepository = FirebaseRepository(requireContext())
-        )
+    private val viewModel: PlantViewModel by activityViewModels {PlantViewModelFactory(
+        plantRepository = PlantRepository(BuildConfig.PLANTNET_API_KEY),
+        firebaseRepository = FirebaseRepository(AppDatabase.getDatabase(requireContext()).observationDao()),
+        context = requireContext() // ✅ Add context
+    )
     }
 
     private val args: PlantLocationMapFragmentArgs by navArgs()
@@ -99,8 +100,9 @@ class PlantLocationMapFragment : Fragment(), OnMapReadyCallback {
         googleMap = map
         isMapReady = true
 
-        // **ALL DATA LOADING LOGIC STAYS IN onMapReady**
-        // Remove previous observers to prevent data contamination from old sessions.
+        // ✅ SET THE CUSTOM INFO WINDOW ADAPTER
+        googleMap.setInfoWindowAdapter(CustomInfoWindowAdapter(requireContext()))
+
         viewModel.allObservations.removeObservers(viewLifecycleOwner)
         viewModel.userObservations.removeObservers(viewLifecycleOwner)
 
@@ -151,10 +153,28 @@ class PlantLocationMapFragment : Fragment(), OnMapReadyCallback {
             if (lat != null && lng != null) {
                 val position = LatLng(lat, lng)
                 val name = obs.currentIdentification.scientificName.ifEmpty { "Unknown" }
-                val snippet = obs.timestamp?.toDate()?.let {
-                    SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(it)
-                } ?: "Observation"
-                googleMap.addMarker(MarkerOptions().position(position).title(name).snippet(snippet))
+
+                val markerColor = when (obs.iucnCategory) {
+                    // ... (your existing color logic) ...
+                    "Endangered", "Critically Endangered" -> BitmapDescriptorFactory.HUE_RED
+                    "Vulnerable" -> BitmapDescriptorFactory.HUE_ORANGE
+                    "Near Threatened" -> BitmapDescriptorFactory.HUE_YELLOW
+                    else -> BitmapDescriptorFactory.HUE_ROSE
+                }
+
+                // The snippet is no longer needed, as the custom window will show the info.
+                // You can leave it empty or remove it.
+                val marker = googleMap.addMarker(
+                    MarkerOptions()
+                        .position(position)
+                        .title(name)
+                        // .snippet("") // This is no longer necessary
+                        .icon(BitmapDescriptorFactory.defaultMarker(markerColor))
+                )
+
+                // ✅ THIS IS THE KEY: Attach the full Observation object to the marker.
+                marker?.tag = obs
+
                 boundsBuilder.include(position)
             }
         }
