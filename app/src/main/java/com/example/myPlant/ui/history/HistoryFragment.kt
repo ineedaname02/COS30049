@@ -15,6 +15,7 @@ import com.example.myPlant.data.repository.FirebaseRepository
 import com.example.myPlant.data.repository.PlantRepository
 import com.example.myPlant.databinding.FragmentHistoryBinding
 import com.google.firebase.auth.FirebaseAuth
+import com.example.myPlant.data.local.AppDatabase
 
 class HistoryFragment : Fragment() {
 
@@ -25,7 +26,8 @@ class HistoryFragment : Fragment() {
     private val viewModel: PlantViewModel by activityViewModels {
         PlantViewModelFactory(
             plantRepository = PlantRepository(BuildConfig.PLANTNET_API_KEY),
-            firebaseRepository = FirebaseRepository(requireContext())
+            firebaseRepository = FirebaseRepository(AppDatabase.getDatabase(requireContext()).observationDao()),
+            context = requireContext() // ✅ Add context
         )
     }
 
