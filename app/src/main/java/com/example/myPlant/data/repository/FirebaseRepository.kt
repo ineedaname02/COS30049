@@ -162,17 +162,6 @@ class FirebaseRepository(private val context: Context) {
         return observationId
     }
 
-    private suspend fun logEndangeredSpecies(data: Map<String, Any>) {
-        try {
-            db.collection("endangeredLogs")
-                .document(data["observationId"].toString())
-                .set(data, SetOptions.merge())
-                .await()
-        } catch (e: Exception) {
-            Log.e("EndangeredLog", "❌ Failed to log endangered species: ${e.message}", e)
-        }
-    }
-
     private fun generatePlantId(result: Result): String {
         val scientificName = result.species?.scientificNameWithoutAuthor ?: "unknown"
         return scientificName.replace("[^A-Za-z0-9]".toRegex(), "_").lowercase()
@@ -482,12 +471,15 @@ class FirebaseRepository(private val context: Context) {
             // ✅ If correct, add to trainingData
             if (isCorrect) {
                 addToTrainingDataFromAdmin(
+
                     observation = observation,
                     adminId = adminId,
                     correctedScientificName = correctedScientificName,
                     correctedCommonName = correctedCommonName
                 )
             }
+
+            handleAdminTrainingData(observation, adminId, correctedScientificName, correctedCommonName)
 
             // ✅ Remove from flagQueue (clean up)
             flagQueueCollection.document(observationId)
@@ -556,6 +548,146 @@ class FirebaseRepository(private val context: Context) {
         }
     }
 
+    // ---------- NEW HELPER: copy image to training storage and return new URL ----------
+    private suspend fun copyImageToTrainingStorage(originalImageUrl: String, scientificName: String): String? {
+        return try {
+            val sourceRef = FirebaseStorage.getInstance().getReferenceFromUrl(originalImageUrl)
+            val newFileName = "${UUID.randomUUID()}.jpg"
+            val folderName = scientificName.replace("[^A-Za-z0-9_]".toRegex(), "_").lowercase()
+            val destRef = storage.reference.child("trainingData/$folderName/$newFileName")
+
+            val bytes = sourceRef.getBytes(5 * 1024 * 1024).await() // up to 5MB
+            destRef.putBytes(bytes).await()
+            destRef.downloadUrl.await().toString()
+        } catch (e: Exception) {
+            Log.e("TrainingStorage", "❌ Failed to copy image to training storage: ${e.message}", e)
+            null
+        }
+    }
+
+    // ---------- NEW HELPER: save endangered metadata to EndangeredData collection ----------
+    private suspend fun saveEndangeredDataToFirestore(endangeredData: Map<String, Any>) {
+        try {
+            val docId = (endangeredData["observationId"] ?: UUID.randomUUID().toString()).toString()
+            db.collection("EndangeredData")
+                .document(docId)
+                .set(endangeredData, SetOptions.merge())
+                .await()
+
+            Log.d("EndangeredData", "✅ Saved endangered metadata for ${docId}")
+        } catch (e: Exception) {
+            Log.e("EndangeredData", "❌ Failed to save endangered data to Firestore: ${e.message}", e)
+        }
+    }
+
+    // ---------- NEW HELPER: central handler for admin-created training/endangered data ----------
+    private suspend fun handleAdminTrainingData(
+        observation: Observation,
+        adminId: String,
+        correctedScientificName: String? = null,
+        correctedCommonName: String? = null
+    ) {
+        try {
+            val scientificName = correctedScientificName
+                ?: observation.currentIdentification?.scientificName
+                ?: "unknown"
+
+            val sanitizedScientific = scientificName
+                .replace("[^A-Za-z0-9 ]".toRegex(), "_")
+                .trim()
+                .lowercase()
+
+            val originalImageUrl = observation.plantImageUrls.firstOrNull()
+            if (originalImageUrl.isNullOrEmpty()) {
+                Log.w("TrainingData", "⚠️ No image found for ${observation.observationId}; skipping training/endangered upload")
+                return
+            }
+
+            // endangered categories list
+            val endangeredCategories = listOf(
+                "extinct",
+                "extinct in the wild",
+                "critically endangered",
+                "endangered"
+            )
+
+            val obsIucn = observation.iucnCategory?.lowercase()
+
+            // If endangered -> copy image to training storage and save metadata to EndangeredData
+            if (obsIucn != null && obsIucn in endangeredCategories) {
+                val newImageUrl = copyImageToTrainingStorage(originalImageUrl, sanitizedScientific)
+
+                val endangeredMap = mutableMapOf<String, Any>(
+                    "observationId" to observation.observationId,
+                    "adminId" to adminId,
+                    "plantId" to (observation.currentIdentification?.plantId ?: ""),
+                    "scientificName" to scientificName,
+                    "commonName" to (correctedCommonName ?: ""),
+                    "iucnCategory" to (observation.iucnCategory ?: ""),
+                    "addedAt" to Timestamp.now(),
+                    "status" to "flagged_endangered",
+                    "source" to "admin_verified"
+                )
+
+                if (!newImageUrl.isNullOrEmpty()) endangeredMap["imageUrl"] = newImageUrl
+                if (observation.geolocation != null) {
+                    endangeredMap["geolocation"] = mapOf(
+                        "lat" to observation.geolocation.lat,
+                        "lng" to observation.geolocation.lng
+                    )
+                }
+
+                saveEndangeredDataToFirestore(endangeredMap)
+                return
+            }
+
+            // Not endangered -> only add to trainingData if geolocation exists
+            if (observation.geolocation == null) {
+                Log.d("TrainingData", "ℹ️ Observation ${observation.observationId} has no geo; skipping trainingData upload.")
+                return
+            }
+
+            // copy image into training storage and save metadata to trainingData (Firestore)
+            val newImageUrl = copyImageToTrainingStorage(originalImageUrl, sanitizedScientific)
+            if (newImageUrl.isNullOrEmpty()) {
+                Log.w("TrainingData", "⚠️ Image copy failed for ${observation.observationId}; skipping Firestore training entry")
+                return
+            }
+
+            val training = TrainingData(
+                trainingId = UUID.randomUUID().toString(),
+                plantId = observation.currentIdentification?.plantId ?: observation.observationId,
+                imageUrl = newImageUrl,
+                sourceType = "admin_verified",
+                sourceObservationId = observation.observationId,
+                verifiedBy = adminId,
+                verificationDate = Timestamp.now(),
+                verificationMethod = "manual",
+                confidenceScore = observation.currentIdentification?.confidence ?: 1.0,
+                geolocation = observation.geolocation,
+                isActive = true,
+                sourceApi = "admin_verified"
+            )
+
+            // Optionally set isEndangered flag if you added that field
+            // val updatedTraining = training.copy(isEndangered = false)
+
+            saveTrainingDataToFirestore(training)
+        } catch (e: Exception) {
+            Log.e("TrainingData", "❌ handleAdminTrainingData failed: ${e.message}", e)
+        }
+    }
+
+    private suspend fun saveTrainingDataToFirestore(trainingData: TrainingData) {
+        try {
+            trainingDataCollection.document(trainingData.trainingId)
+                .set(trainingData, SetOptions.merge())
+                .await()
+            Log.d("TrainingData", "✅ Saved training data (Firestore) for ${trainingData.plantId}")
+        } catch (e: Exception) {
+            Log.e("TrainingData", "❌ Failed saving training data to Firestore: ${e.message}", e)
+        }
+    }
 
 
 }

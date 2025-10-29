@@ -14,5 +14,6 @@ data class TrainingData(
     val confidenceScore: Double = 1.0,
     val geolocation: GeoLocation? = null,
     val isActive: Boolean = true,
-    val sourceApi: String? = null
+    val sourceApi: String? = null,
+    val isEndangered: Boolean = false // <-- optional flag
 )
