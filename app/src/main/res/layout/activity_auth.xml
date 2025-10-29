@@ -11,51 +11,60 @@
         android:id="@+id/appBarLayout" />
 
     <ScrollView
+        android:id="@+id/scrollView2"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:fillViewport="true"
         app:layout_behavior="@string/appbar_scrolling_view_behavior">
 
-        <LinearLayout
-            android:layout_width="match_parent" 
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="32dp"
-            android:gravity="center"
-            android:layout_gravity="center">
+    </ScrollView>
 
-            <!-- App Logo/Icon Area -->
-            <LinearLayout
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="32dp"
+        app:layout_anchor="@+id/scrollView2"
+        app:layout_anchorGravity="center">
+
+        <!-- App Logo/Icon Area -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="48dp"
+            android:gravity="center"
+            android:orientation="vertical">
+
+            <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:gravity="center"
-                android:layout_marginBottom="48dp">
+                android:layout_marginTop="16dp"
+                android:text="SmartPlant"
+                android:textAppearance="@style/TextAppearance.SmartPlant.Headline" />
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="SmartPlant"
-                    android:textAppearance="@style/TextAppearance.SmartPlant.Headline"
-                    android:layout_marginTop="16dp" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="Identify plants with AI"
+                android:textAppearance="@style/TextAppearance.SmartPlant.Caption" />
 
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Identify plants with AI"
-                    android:textAppearance="@style/TextAppearance.SmartPlant.Caption"
-                    android:layout_marginTop="8dp" />
+        </LinearLayout>
 
-            </LinearLayout>
-
-            <!-- Login Form Card -->
-            <androidx.cardview.widget.CardView
+        <!-- Login Form Card -->
+        <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="24dp"
+            android:background="@android:color/white"
+            app:cardBackgroundColor="@color/surface_light"
             app:cardCornerRadius="16dp"
             app:cardElevation="6dp"
-            app:cardBackgroundColor="@color/surface_light">
+            app:cardMaxElevation="8dp"
+            app:cardPreventCornerOverlap="false"
+            app:cardUseCompatPadding="true">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -66,21 +75,21 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Welcome Back"
-                    android:textSize="24sp"
-                    android:textStyle="bold"
-                    android:textColor="@color/text_primary"
                     android:layout_gravity="center"
-                    android:layout_marginBottom="8dp" />
+                    android:layout_marginBottom="8dp"
+                    android:text="Welcome Back"
+                    android:textColor="@color/text_primary"
+                    android:textSize="24sp"
+                    android:textStyle="bold" />
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Sign in to continue"
-                    android:textSize="14sp"
-                    android:textColor="@color/text_secondary"
                     android:layout_gravity="center"
-                    android:layout_marginBottom="32dp" />
+                    android:layout_marginBottom="32dp"
+                    android:text="Sign in to continue"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="14sp" />
 
                 <!-- Email Input -->
                 <com.google.android.material.textfield.TextInputLayout
@@ -109,11 +118,11 @@
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="24dp"
                     app:boxStrokeColor="@color/primary_green"
+                    app:endIconMode="password_toggle"
+                    app:endIconTint="@color/primary_green"
                     app:hintTextColor="@color/primary_green"
                     app:startIconDrawable="@android:drawable/ic_lock_lock"
-                    app:startIconTint="@color/primary_green"
-                    app:endIconMode="password_toggle"
-                    app:endIconTint="@color/primary_green">
+                    app:startIconTint="@color/primary_green">
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/passwordEditText"
@@ -133,20 +142,20 @@
                     android:layout_height="wrap_content"
                     android:layout_gravity="center"
                     android:layout_marginBottom="16dp"
-                    android:visibility="gone"
-                    android:indeterminateTint="@color/primary_green" />
+                    android:indeterminateTint="@color/primary_green"
+                    android:visibility="gone" />
 
                 <!-- Login Button -->
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/loginButton"
                     android:layout_width="match_parent"
                     android:layout_height="56dp"
-                    android:text="Sign In"
-                    android:textSize="16sp"
-                    android:textStyle="bold"
                     android:layout_marginBottom="16dp"
                     android:backgroundTint="@color/primary_green"
+                    android:text="Sign In"
                     android:textColor="@color/text_white"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
                     app:cornerRadius="12dp"
                     app:rippleColor="@color/primary_green_light" />
 
@@ -155,15 +164,15 @@
                     android:id="@+id/registerButton"
                     android:layout_width="match_parent"
                     android:layout_height="56dp"
+                    android:backgroundTint="@color/background_white"
                     android:text="Create Account"
+                    android:textColor="@color/primary_green"
                     android:textSize="16sp"
                     android:textStyle="bold"
-                    android:backgroundTint="@color/background_white"
-                    android:textColor="@color/primary_green"
                     app:cornerRadius="12dp"
+                    app:rippleColor="@color/primary_green_light"
                     app:strokeColor="@color/primary_green"
-                    app:strokeWidth="2dp"
-                    app:rippleColor="@color/primary_green_light" />
+                    app:strokeWidth="2dp" />
 
             </LinearLayout>
 
@@ -173,13 +182,11 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
             android:text="© 2025 SmartPlant. All rights reserved."
-            android:textSize="12sp"
             android:textColor="@color/text_secondary"
-            android:layout_marginTop="16dp" />
+            android:textSize="12sp" />
 
-        </LinearLayout>
-
-    </ScrollView>
+    </LinearLayout>
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>
