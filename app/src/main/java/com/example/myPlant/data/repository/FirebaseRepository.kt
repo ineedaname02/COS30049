@@ -99,6 +99,7 @@ class FirebaseRepository(private val context: Context) {
         updatePlantsCatalog(allSuggestions)
 
         // 7️⃣ Add to training data if confident
+        // TODO Need adjust confidence level
         if (topConfidence > 0.8 && topSuggestion != null) {
             addToTrainingDataIfConfident(observation, topSuggestion)
         }
@@ -106,10 +107,6 @@ class FirebaseRepository(private val context: Context) {
         // 8️⃣ Update user stats
         updateUserContributionStats(currentUser.uid, "observations")
 
-        // 7️⃣ Add to training data if confident
-        if (topConfidence > 0.8 && topSuggestion != null) {
-            addToTrainingDataIfConfident(observation, topSuggestion)
-        }
 
 // 🆕 7.5️⃣ Add to flag queue if AI unsure (low confidence)
         if (topConfidence <= 0.7) {
@@ -132,7 +129,48 @@ class FirebaseRepository(private val context: Context) {
             }
         }
 
+// 🆕 7.6️⃣ Flag and log endangered species for conservation tracking
+        if (!iucnCategory.isNullOrEmpty()) {
+            val endangeredCategories = listOf(
+                "extinct",
+                "extinct in the wild",
+                "critically endangered",
+                "endangered"
+            )
+            if (iucnCategory.lowercase() in endangeredCategories) {
+                val currentUser = auth.currentUser
+                if (currentUser != null) {
+                    val endangeredData: Map<String, Any> = mapOf(
+                        "observationId" to observationId as Any,
+                        "userId" to currentUser.uid as Any,
+                        "scientificName" to (topSuggestion?.scientificName ?: "") as Any,
+                        "iucnCategory" to iucnCategory as Any,
+                        "timestamp" to Timestamp.now() as Any,
+                        "status" to "flagged_endangered" as Any
+                    )
+
+
+                    // 🧩 1️⃣ Add to flagQueue for admin awareness
+                    flagQueueCollection.document("endangered_$observationId")
+                        .set(endangeredData, SetOptions.merge())
+                        .await()
+
+                }
+            }
+        }
+
         return observationId
+    }
+
+    private suspend fun logEndangeredSpecies(data: Map<String, Any>) {
+        try {
+            db.collection("endangeredLogs")
+                .document(data["observationId"].toString())
+                .set(data, SetOptions.merge())
+                .await()
+        } catch (e: Exception) {
+            Log.e("EndangeredLog", "❌ Failed to log endangered species: ${e.message}", e)
+        }
     }
 
     private fun generatePlantId(result: Result): String {
@@ -388,14 +426,22 @@ class FirebaseRepository(private val context: Context) {
                 )
             }
             observations.sortedByDescending {
-                // Prioritize endangered species first
-                when (it.iucnCategory?.lowercase()) {
-                    "critically endangered" -> 3
-                    "endangered" -> 2
-                    "vulnerable" -> 1
+                val priority = when (it.iucnCategory?.lowercase()) {
+                    "extinct" -> 9
+                    "extinct in the wild" -> 8
+                    "critically endangered" -> 7
+                    "endangered" -> 6
+                    "vulnerable" -> 5
+                    "near threatened" -> 4
+                    "least concern" -> 3
+                    "data deficient" -> 2
+                    "not evaluated" -> 1
                     else -> 0
                 }
+                // Add slight weight if low confidence (to push it up for review)
+                priority + if (it.confidence < 0.5) 1 else 0
             }
+
         } catch (e: Exception) {
             Log.e("FirebaseRepository", "Error fetching pending observations: ${e.message}", e)
             emptyList()

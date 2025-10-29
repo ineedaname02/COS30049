@@ -31,17 +31,35 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
 
     // ---------------------------
-    // CAMERA PERMISSION HANDLING
+    // CAMERA + LOCATION PERMISSION HANDLING
     // ---------------------------
-    private fun checkCameraPermissionAndLaunch() {
-        val cameraPermission = android.Manifest.permission.CAMERA
 
-        if (checkSelfPermission(cameraPermission) == PackageManager.PERMISSION_GRANTED) {
-            openCamera()
-        } else {
-            requestPermissions(arrayOf(cameraPermission), 1001)
+    private fun checkPermissionsAndLocationEnabled(): Boolean {
+        val cameraPermission = android.Manifest.permission.CAMERA
+        val locationPermission = android.Manifest.permission.ACCESS_FINE_LOCATION
+
+        val hasCameraPermission = checkSelfPermission(cameraPermission) == PackageManager.PERMISSION_GRANTED
+        val hasLocationPermission = checkSelfPermission(locationPermission) == PackageManager.PERMISSION_GRANTED
+
+        if (!hasCameraPermission || !hasLocationPermission) {
+            requestPermissions(arrayOf(cameraPermission, locationPermission), 1002)
+            return false
         }
+
+        val locationManager = getSystemService(android.location.LocationManager::class.java)
+        val isLocationEnabled = locationManager.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER) ||
+                locationManager.isProviderEnabled(android.location.LocationManager.NETWORK_PROVIDER)
+
+        if (!isLocationEnabled) {
+            Toast.makeText(this, "Please turn on location to continue", Toast.LENGTH_SHORT).show()
+            // Optional: automatically open location settings
+            // startActivity(Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+            return false
+        }
+
+        return true
     }
+
 
     private fun openCamera() {
         val cameraIntent = Intent(MediaStore.ACTION_IMAGE_CAPTURE)
@@ -59,10 +77,13 @@ class MainActivity : AppCompatActivity() {
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
 
-        if (requestCode == 1001 && grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-            openCamera()
-        } else {
-            Toast.makeText(this, "Camera permission denied", Toast.LENGTH_SHORT).show()
+        if (requestCode == 1002) {
+            val allGranted = grantResults.all { it == PackageManager.PERMISSION_GRANTED }
+            if (allGranted) {
+                openCamera()
+            } else {
+                Toast.makeText(this, "Camera and location permissions are required.", Toast.LENGTH_LONG).show()
+            }
         }
     }
 
@@ -114,14 +135,19 @@ class MainActivity : AppCompatActivity() {
             if (destination.id == R.id.nav_home) {
                 binding.appBarMain.fab.show()
                 binding.appBarMain.fab.setOnClickListener {
-                    val navHostFragment = supportFragmentManager.findFragmentById(R.id.nav_host_fragment_content_main)
-                    val homeFragment = navHostFragment?.childFragmentManager?.fragments
-                        ?.firstOrNull { it is HomeFragment } as? HomeFragment
-                    homeFragment?.launchCamera()
+                    if (checkPermissionsAndLocationEnabled()) {
+                        val navHostFragment = supportFragmentManager.findFragmentById(R.id.nav_host_fragment_content_main)
+                        val homeFragment = navHostFragment?.childFragmentManager?.fragments
+                            ?.firstOrNull { it is HomeFragment } as? HomeFragment
+                        homeFragment?.launchCamera()
+                    } else {
+                        Toast.makeText(this, "Please turn on location to continue", Toast.LENGTH_SHORT).show()
+                    }
                 }
             } else {
                 binding.appBarMain.fab.hide()
             }
+
             // ✅ HANDLE LOGOUT HERE
             if (destination.id == R.id.nav_logout) {
                 FirebaseAuth.getInstance().signOut()
@@ -129,6 +155,7 @@ class MainActivity : AppCompatActivity() {
                 finish()
             }
         }
+
 
         // ---------------------------
         // NAVIGATION SETUP

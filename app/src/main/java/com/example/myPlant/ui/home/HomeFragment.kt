@@ -66,6 +66,8 @@ class HomeFragment : Fragment() {
 
     private lateinit var myAIClassifier: MyAIClassifier
 
+    private lateinit var locationCallback: LocationCallback
+
     // Permission request
     private val locationPermissionRequest = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -82,6 +84,11 @@ class HomeFragment : Fragment() {
             }
         }
     }
+
+    private fun stopLocationUpdates() {
+        fusedLocationClient.removeLocationUpdates(locationCallback)
+    }
+
 
     private val pickImageLauncher = registerForActivityResult(
         ActivityResultContracts.GetMultipleContents()
@@ -104,7 +111,6 @@ class HomeFragment : Fragment() {
             binding.imageRecyclerView.visibility = View.VISIBLE
 
             binding.textHome.text = "Selected ${selectedImageUris.size} image(s)"
-            requestLocationPermission()
         }
     }
 
@@ -449,6 +455,7 @@ class HomeFragment : Fragment() {
         }
     }
 
+
     private fun getCurrentLocation() {
         if (ActivityCompat.checkSelfPermission(
                 requireContext(),
@@ -466,18 +473,21 @@ class HomeFragment : Fragment() {
             priority = LocationRequest.PRIORITY_HIGH_ACCURACY
         }
 
+        locationCallback = object : LocationCallback() {
+            override fun onLocationResult(locationResult: LocationResult) {
+                currentLocation = locationResult.lastLocation
+                fusedLocationClient.removeLocationUpdates(this)
+                currentLocation?.let { location ->
+                    binding.textHome.append(
+                        "\n Location: ${"%.6f".format(location.latitude)}, ${"%.6f".format(location.longitude)}"
+                    )
+                }
+            }
+        }
+
         fusedLocationClient.requestLocationUpdates(
             locationRequest,
-            object : LocationCallback() {
-                override fun onLocationResult(locationResult: LocationResult) {
-                    currentLocation = locationResult.lastLocation
-                    fusedLocationClient.removeLocationUpdates(this)
-
-                    currentLocation?.let { location ->
-                        binding.textHome.append("\n Location: ${"%.6f".format(location.latitude)}, ${"%.6f".format(location.longitude)}")
-                    }
-                }
-            },
+            locationCallback,
             Looper.getMainLooper()
         )
     }
@@ -565,6 +575,7 @@ class HomeFragment : Fragment() {
             requireActivity().runOnUiThread {
                 binding.loadingContainer.visibility = View.GONE
             }
+
         }
     }
 
