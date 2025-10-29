@@ -13,7 +13,6 @@
     <item name="android:statusBarColor">@color/black</item>
     <!-- Force status bar icons to be light (white) -->
     <item name="android:windowLightStatusBar">false</item>
-        <!-- Customize your theme here. -->
     </style>
 
     <style name="Theme.COS30049.NoActionBar">

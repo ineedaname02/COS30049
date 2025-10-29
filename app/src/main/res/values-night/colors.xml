@@ -3,7 +3,7 @@
     <!-- Dark theme color overrides -->
     <color name="primary_green">#FF81C784</color>
     <color name="primary_green_dark">#FF388E3C</color>
-    <color name="primary_green_light">#FFA5D6A7</color>
+    <color name="primary_green_light">#FF4CAF50</color>
 
     <color name="accent_blue">#FF90CAF9</color>
     <color name="accent_blue_dark">#FF1976D2</color>

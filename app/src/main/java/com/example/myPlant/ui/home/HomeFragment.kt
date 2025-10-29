@@ -102,7 +102,9 @@ class HomeFragment : Fragment() {
             selectedImageUris.clear()
             selectedImageUris.addAll(uris.take(5))
 
-            adapter = SelectedImagesAdapter(selectedImageUris)
+            adapter = SelectedImagesAdapter(selectedImageUris) { uri ->
+                removeImage(uri)
+            }
             binding.imageRecyclerView.adapter = adapter
             binding.imageRecyclerView.layoutManager =
                 LinearLayoutManager(requireContext(), LinearLayoutManager.HORIZONTAL, false)
@@ -137,7 +139,9 @@ class HomeFragment : Fragment() {
             }
 
             // Update adapter / UI
-            adapter = SelectedImagesAdapter(selectedImageUris)
+            adapter = SelectedImagesAdapter(selectedImageUris) { uri ->
+                removeImage(uri)
+            }
             binding.imageRecyclerView.adapter = adapter
             binding.imageRecyclerView.layoutManager =
                 LinearLayoutManager(requireContext(), LinearLayoutManager.HORIZONTAL, false)
@@ -407,6 +411,17 @@ class HomeFragment : Fragment() {
                     }
                 }
             } ?: Toast.makeText(requireContext(), "No observation to flag", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun removeImage(uri: Uri) {
+        selectedImageUris.remove(uri)
+        adapter.notifyDataSetChanged()
+        if (selectedImageUris.isEmpty()) {
+            binding.imageRecyclerView.visibility = View.GONE
+            binding.textHome.text = "Upload plant images for identification"
+        } else {
+            binding.textHome.text = "Selected ${selectedImageUris.size} image(s)"
         }
     }
 
