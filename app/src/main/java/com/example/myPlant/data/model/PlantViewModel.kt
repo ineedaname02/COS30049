@@ -36,7 +36,7 @@ class PlantViewModel(
 
     fun identifyPlant(
         images: List<MultipartBody.Part>,
-        organs: List<MultipartBody.Part>,
+        organs: List<String>,
         project: String = "all"
     ) {
         viewModelScope.launch {

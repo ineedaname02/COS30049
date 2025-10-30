@@ -11,7 +11,7 @@ interface PlantNetApi {
     suspend fun identifyPlant(
         @Path("project") project: String = "all",
         @Part images: List<MultipartBody.Part>,
-        @Part organs: List<MultipartBody.Part>,
+        @Part("organs") organs: List<String>,
         @Query("api-key") apiKey: String,
         @Query("include-related-images") includeRelated: Boolean = false,
         @Query("no-reject") noReject: Boolean = false,
