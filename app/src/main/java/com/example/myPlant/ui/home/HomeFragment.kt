@@ -647,14 +647,16 @@ class HomeFragment : Fragment() {
     private fun prepareImagePart(uri: Uri): MultipartBody.Part {
         val context = requireContext()
         val inputStream = context.contentResolver.openInputStream(uri)
-        val file = File(context.cacheDir, getFileNameFromUri(uri))
-        val outputStream = FileOutputStream(file)
-        inputStream?.copyTo(outputStream)
-        inputStream?.close()
-        outputStream.close()
+            ?: throw IllegalStateException("Unable to open input stream for URI: $uri")
 
-        val requestBody = file.asRequestBody("image/*".toMediaTypeOrNull())
-        return MultipartBody.Part.createFormData("images", file.name, requestBody)
+        // Copy the stream to a temporary file in cache
+        val tempFile = File.createTempFile("upload_", ".jpg", context.cacheDir)
+        tempFile.outputStream().use { output ->
+            inputStream.copyTo(output)
+        }
+
+        val requestFile = tempFile.asRequestBody("image/jpeg".toMediaTypeOrNull())
+        return MultipartBody.Part.createFormData("images", tempFile.name, requestFile)
     }
 
     private fun getFileNameFromUri(uri: Uri): String {
