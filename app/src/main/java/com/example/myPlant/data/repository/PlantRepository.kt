@@ -13,7 +13,7 @@ class PlantRepository(
     // Existing PlantNet API function
     suspend fun identifyPlant(
         images: List<MultipartBody.Part>,
-        organs: List<String>,
+        organs: List<MultipartBody.Part>,
         project: String
     ) = RetrofitInstance.api.identifyPlant(
         project = project,

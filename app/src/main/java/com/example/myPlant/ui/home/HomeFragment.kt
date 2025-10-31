@@ -325,7 +325,9 @@ class HomeFragment : Fragment() {
                 viewModel.lastImageUris = selectedImageUris
 
                 val imageParts = selectedImageUris.map { uri -> prepareImagePart(uri) }
-                val organParts = List(imageParts.size) { "leaf" }
+                val organParts = List(imageParts.size) {
+                    MultipartBody.Part.createFormData("organs", "leaf")
+                }
 
                 lifecycleScope.launch {
                     // Run your custom AI model on the selected images
