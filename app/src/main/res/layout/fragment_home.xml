@@ -182,7 +182,7 @@
                     android:id="@+id/buttonSend"
                     android:layout_width="match_parent"
                     android:layout_height="56dp"
-                    android:text="Send to PlantNet"
+                    android:text="Identify"
                     android:textSize="16sp"
                     android:textStyle="bold"
                     android:backgroundTint="@color/accent_blue"
