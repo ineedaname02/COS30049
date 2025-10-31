@@ -2,18 +2,16 @@ package com.example.myPlant.ui.history
 
 import android.view.LayoutInflater
 import android.view.ViewGroup
-import androidx.compose.ui.semantics.text
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 import com.example.myPlant.R
-import com.example.myPlant.data.model.Observation //old - PlantObservation
+import com.example.myPlant.data.model.Observation
 import com.example.myPlant.databinding.ItemHistoryBinding
 import java.text.SimpleDateFormat
 import java.util.*
 
-// ✅ Update the adapter to use ListAdapter with Observation
 class HistoryAdapter : ListAdapter<Observation, HistoryAdapter.HistoryViewHolder>(HistoryDiffCallback()) {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): HistoryViewHolder {
@@ -22,29 +20,35 @@ class HistoryAdapter : ListAdapter<Observation, HistoryAdapter.HistoryViewHolder
     }
 
     override fun onBindViewHolder(holder: HistoryViewHolder, position: Int) {
-        val observation = getItem(position)
-        holder.bind(observation)
+        holder.bind(getItem(position))
     }
 
-    inner class HistoryViewHolder(private val binding: ItemHistoryBinding) : RecyclerView.ViewHolder(binding.root) {
-        // ✅ Update the bind function to work with the Observation object
+    inner class HistoryViewHolder(private val binding: ItemHistoryBinding) :
+        RecyclerView.ViewHolder(binding.root) {
+
         fun bind(observation: Observation) {
-            // Scientific Name
-            binding.historyScientificName.text = observation.currentIdentification.scientificName.ifEmpty { "Unknown Species" }
+            // ✅ Defensive null handling for currentIdentification
+            val identification = observation.currentIdentification
 
-            // Date
-            binding.historyDate.text = observation.timestamp?.toDate()?.let {
+            // Scientific name
+            binding.historyScientificName.text =
+                identification?.scientificName?.takeIf { it.isNotBlank() } ?: "Unknown species"
+
+            // Date formatting
+            val formattedDate = observation.timestamp?.toDate()?.let {
                 SimpleDateFormat("dd MMM yyyy, h:mm a", Locale.getDefault()).format(it)
-            } ?: "No date"
+            } ?: "Unknown date"
+            binding.historyDate.text = formattedDate
 
-            // IUCN Status (if available)
+            // IUCN category
             binding.iucnStatus.text = observation.iucnCategory ?: "IUCN Status: N/A"
 
-            // Image
-            if (observation.plantImageUrls.isNotEmpty()) {
+            // Load first image (if available)
+            if (!observation.plantImageUrls.isNullOrEmpty()) {
                 Glide.with(binding.root.context)
                     .load(observation.plantImageUrls.first())
-                    .placeholder(R.drawable.ic_menu_gallery) // A default placeholder
+                    .placeholder(R.drawable.ic_menu_gallery)
+                    .centerCrop()
                     .into(binding.historyImage)
             } else {
                 binding.historyImage.setImageResource(R.drawable.ic_menu_gallery)
@@ -52,9 +56,9 @@ class HistoryAdapter : ListAdapter<Observation, HistoryAdapter.HistoryViewHolder
         }
     }
 
-    // ✅ Update DiffUtil to compare Observation objects
     class HistoryDiffCallback : DiffUtil.ItemCallback<Observation>() {
         override fun areItemsTheSame(oldItem: Observation, newItem: Observation): Boolean {
+            // ✅ Defensive check for missing IDs
             return oldItem.observationId == newItem.observationId
         }
 

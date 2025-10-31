@@ -9,6 +9,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.storage.FirebaseStorage
 import com.google.firebase.Timestamp
+import com.google.firebase.firestore.FieldPath
 import kotlinx.coroutines.tasks.await
 import java.util.UUID
 import com.google.firebase.firestore.Query
@@ -91,7 +92,12 @@ class FirebaseRepository(private val context: Context) {
         )
 
         // 5️⃣ Upload to Firestore
-        observationsCollection.document(observationId)
+        val userObservationsRef = FirebaseFirestore.getInstance()
+            .collection("users")
+            .document(currentUser.uid)
+            .collection("observations")
+
+        userObservationsRef.document(observationId)
             .set(observation)
             .await()
 
@@ -114,12 +120,14 @@ class FirebaseRepository(private val context: Context) {
             if (currentUser != null) {
                 val flagData = mapOf(
                     "observationId" to observationId,
+                    "userId" to currentUser.uid, // ✅ Added field
                     "flaggedBy" to currentUser.uid,
                     "flaggedAt" to Timestamp.now(),
                     "reason" to "Low confidence AI prediction (${String.format("%.2f", topConfidence)})",
                     "status" to "pending",
                     "priority" to if (topConfidence < 0.4) "high" else "medium"
                 )
+
 
                 flagQueueCollection.document(observationId)
                     .set(flagData, SetOptions.merge())
@@ -140,21 +148,24 @@ class FirebaseRepository(private val context: Context) {
             if (iucnCategory.lowercase() in endangeredCategories) {
                 val currentUser = auth.currentUser
                 if (currentUser != null) {
-                    val endangeredData: Map<String, Any> = mapOf(
-                        "observationId" to observationId as Any,
-                        "userId" to currentUser.uid as Any,
-                        "scientificName" to (topSuggestion?.scientificName ?: "") as Any,
-                        "iucnCategory" to iucnCategory as Any,
-                        "timestamp" to Timestamp.now() as Any,
-                        "status" to "flagged_endangered" as Any
+                    val endangeredData = mapOf(
+                        "observationId" to observationId,
+                        "userId" to currentUser.uid, // ✅ Added for path lookup later
+                        "scientificName" to (topSuggestion?.scientificName ?: ""),
+                        "iucnCategory" to iucnCategory,
+                        "flaggedBy" to currentUser.uid,
+                        "flaggedAt" to Timestamp.now(),
+                        "reason" to "Detected endangered species ($iucnCategory)",
+                        "status" to "pending",
+                        "priority" to "high"
                     )
-
 
                     // 🧩 1️⃣ Add to flagQueue for admin awareness
                     flagQueueCollection.document("endangered_$observationId")
                         .set(endangeredData, SetOptions.merge())
                         .await()
 
+                    Log.d("FlagQueue", "🚨 Added endangered species $observationId to flagQueue")
                 }
             }
         }
@@ -266,110 +277,108 @@ class FirebaseRepository(private val context: Context) {
 
     suspend fun flagObservation(observationId: String, reason: String): String {
         val currentUser = auth.currentUser ?: throw Exception("User not authenticated")
+        val userId = currentUser.uid
 
         val flagInfo = FlagInfo(
             isFlagged = true,
-            flaggedBy = currentUser.uid,
+            flaggedBy = userId,
             flaggedAt = Timestamp.now(),
             reason = reason
         )
 
-        // Update the observation status
-        observationsCollection.document(observationId)
-            .update(
-                mapOf(
-                    "flagInfo" to flagInfo,
-                    "currentIdentification.status" to "flagged"
-                )
+        val docRef = db.collection("users").document(userId)
+            .collection("observations").document(observationId)
+
+        // Update observation status
+        docRef.update(
+            mapOf(
+                "flagInfo" to flagInfo,
+                "currentIdentification.status" to "flagged"
             )
-            .await()
+        ).await()
 
         // Add to flag queue for admin review
         flagQueueCollection.document(observationId)
             .set(
                 mapOf(
+                    "userId" to userId,
                     "observationId" to observationId,
-                    "flaggedBy" to currentUser.uid,
                     "flaggedAt" to Timestamp.now(),
-                    "reason" to reason,
                     "status" to "pending",
-                    "priority" to "medium"
+                    "reason" to reason
                 ),
                 SetOptions.merge()
             )
             .await()
 
-        // Update user stats
-        updateUserContributionStats(currentUser.uid, "flagsSubmitted")
 
+        updateUserContributionStats(userId, "flagsSubmitted")
         return "Flag submitted for observation $observationId"
     }
 
 
-    suspend fun confirmObservation(observationId: String, plantId: String, scientificName: String): String {
+
+    suspend fun confirmObservation(
+        observationId: String,
+        plantId: String,
+        scientificName: String
+    ): String {
         val currentUser = auth.currentUser ?: throw Exception("User not authenticated")
+        val userId = currentUser.uid
+
+        // Prefer the user’s own observation path
+        val docRef = db.collection("users").document(userId)
+            .collection("observations").document(observationId)
+
+        val snapshot = docRef.get().await()
+        val observation = snapshot.toObject(Observation::class.java)
+            ?: throw Exception("Observation $observationId not found")
 
         // Update Firestore observation
-        observationsCollection.document(observationId)
-            .update(
-                mapOf(
-                    "currentIdentification.plantId" to plantId,
-                    "currentIdentification.scientificName" to scientificName,
-                    "currentIdentification.identifiedBy" to "user_confirmed",
-                    "currentIdentification.status" to "user_verified",
-                    "flagInfo" to null
-                )
+        docRef.update(
+            mapOf(
+                "currentIdentification.plantId" to plantId,
+                "currentIdentification.scientificName" to scientificName,
+                "currentIdentification.identifiedBy" to "user_confirmed",
+                "currentIdentification.status" to "user_verified",
+                "flagInfo" to null
             )
-            .await()
+        ).await()
 
-        // Retrieve observation
-        val observation = observationsCollection.document(observationId)
-            .get()
-            .await()
-            .toObject(Observation::class.java)
+        // Handle training or endangered data
+        val endangeredCategories = listOf(
+            "extinct",
+            "extinct in the wild",
+            "critically endangered",
+            "endangered"
+        )
 
-        // Add to training data if available
-        // ✅ Add to training data or EndangeredData depending on IUCN category
-        if (observation != null) {
-            val endangeredCategories = listOf(
-                "extinct",
-                "extinct in the wild",
-                "critically endangered",
-                "endangered"
+        val category = observation.iucnCategory?.lowercase()
+        if (category in endangeredCategories) {
+            saveEndangeredDataToFirestore(observation, source = "user_verified")
+            Log.d("TrainingData", "⚠️ Skipped trainingData: $scientificName is endangered")
+        } else {
+            val trainingData = TrainingData(
+                trainingId = UUID.randomUUID().toString(),
+                plantId = plantId,
+                imageUrl = observation.plantImageUrls.firstOrNull() ?: "",
+                sourceType = "user_verified",
+                sourceObservationId = observationId,
+                verifiedBy = userId,
+                verificationDate = Timestamp.now(),
+                verificationMethod = "user_confirmation",
+                confidenceScore = 1.0,
+                geolocation = observation.geolocation,
+                isActive = true,
+                sourceApi = "user_verified"
             )
-            val category = observation.iucnCategory?.lowercase()
 
-            if (category in endangeredCategories) {
-                // Save to EndangeredData instead
-                saveEndangeredDataToFirestore(observation, source = "user_verified")
-                Log.d("TrainingData", "⚠️ Skipped trainingData: $scientificName is endangered")
-            } else {
-                // Safe to add to trainingData
-                val trainingData = TrainingData(
-                    trainingId = UUID.randomUUID().toString(),
-                    plantId = plantId,
-                    imageUrl = observation.plantImageUrls.first(),
-                    sourceType = "user_verified",
-                    sourceObservationId = observationId,
-                    verifiedBy = currentUser.uid,
-                    verificationDate = Timestamp.now(),
-                    verificationMethod = "user_confirmation",
-                    confidenceScore = 1.0,
-                    geolocation = observation.geolocation,
-                    isActive = true,
-                    sourceApi = "user_verified"
-                )
-
-                trainingDataCollection.document(trainingData.trainingId)
-                    .set(trainingData, SetOptions.merge())
-                    .await()
-            }
+            trainingDataCollection.document(trainingData.trainingId)
+                .set(trainingData, SetOptions.merge())
+                .await()
         }
 
-
-        // Update user contribution stats
-        updateUserContributionStats(currentUser.uid, "verifiedIdentifications")
-
+        updateUserContributionStats(userId, "verifiedIdentifications")
         return "Observation $observationId confirmed successfully"
     }
 
@@ -402,12 +411,12 @@ class FirebaseRepository(private val context: Context) {
     // ✅ ADD THIS FOR THE USER'S HISTORY MAP
     suspend fun getFullUserObservations(userId: String): List<Observation> {
         return try {
-            val snapshot = observationsCollection
-            .whereEqualTo("userId", userId)
-            .orderBy("timestamp", Query.Direction.DESCENDING)
-            .limit(200) // Limit to user's 200 most recent for performance
-            .get()
-            .await()
+            val snapshot =  usersCollection
+                .document(userId)
+                .collection("observations")
+                .orderBy("timestamp", Query.Direction.DESCENDING)
+                .get()
+                .await()
 
             // This automatically converts documents to the full Observation data class
             snapshot.toObjects(Observation::class.java)
@@ -421,24 +430,27 @@ class FirebaseRepository(private val context: Context) {
     suspend fun fetchPendingObservations(limit: Int = 30): List<PlantObservation> {
         return try {
             val snapshot = flagQueueCollection
-                .whereEqualTo("status", "pending")
                 .orderBy("flaggedAt", Query.Direction.ASCENDING)
                 .limit(limit.toLong())
                 .get()
                 .await()
 
-            val flaggedIds = snapshot.documents.mapNotNull { it.getString("observationId") }
-            if (flaggedIds.isEmpty()) return emptyList()
-
             val observations = mutableListOf<PlantObservation>()
-            for (id in flaggedIds) {
-                val doc = observationsCollection.document(id).get().await()
-                val data = doc.toObject(Observation::class.java) ?: continue
 
+            for (flag in snapshot.documents) {
+                val observationId = flag.getString("observationId") ?: continue
+                val userId = flag.getString("userId") ?: continue
+
+                val path = "users/$userId/observations/$observationId"
+                val docRef = db.document(path).get().await()
+
+                if (!docRef.exists()) continue
+                val data = docRef.toObject(Observation::class.java) ?: continue
                 val current = data.currentIdentification
+
                 observations.add(
                     PlantObservation(
-                        id = id,
+                        id = observationId,
                         scientificName = current?.scientificName ?: "Unknown",
                         confidence = current?.confidence ?: 0.0,
                         iucnCategory = data.iucnCategory ?: "-",
@@ -446,6 +458,7 @@ class FirebaseRepository(private val context: Context) {
                     )
                 )
             }
+
             observations.sortedByDescending {
                 val priority = when (it.iucnCategory?.lowercase()) {
                     "extinct" -> 9
@@ -459,15 +472,18 @@ class FirebaseRepository(private val context: Context) {
                     "not evaluated" -> 1
                     else -> 0
                 }
-                // Add slight weight if low confidence (to push it up for review)
                 priority + if (it.confidence < 0.5) 1 else 0
             }
 
         } catch (e: Exception) {
-            Log.e("FirebaseRepository", "Error fetching pending observations: ${e.message}", e)
+            Log.e("FirebaseRepository", "❌ Error fetching pending observations: ${e.message}", e)
             emptyList()
         }
     }
+
+
+
+
 
     // ✅ Process admin validation (correct / wrong)
     // ✅ Improved Admin Validation Process
@@ -479,14 +495,26 @@ class FirebaseRepository(private val context: Context) {
         correctedCommonName: String? = null
     ): Boolean {
         return try {
-            val docRef = observationsCollection.document(observationId)
-            val snapshot = docRef.get().await()
-            val observation = snapshot.toObject(Observation::class.java)
+            // 🔹 Step 1: Search across all users’ observation subcollections
+            val querySnapshot = FirebaseFirestore.getInstance()
+                .collectionGroup("observations")
+                .whereEqualTo("observationId", observationId)
+                .get()
+                .await()
 
-            if (observation == null) {
+            val snapshot = querySnapshot.documents.firstOrNull()
+            if (snapshot == null) {
                 Log.w("AdminValidation", "⚠️ Observation $observationId not found")
                 return false
             }
+
+            val observation = snapshot.toObject(Observation::class.java)
+            if (observation == null) {
+                Log.w("AdminValidation", "⚠️ Observation $observationId could not be parsed")
+                return false
+            }
+
+            val docRef = snapshot.reference // ✅ Points to the correct user path
 
             val updateData = hashMapOf<String, Any>(
                 "verifiedBy" to adminId,
@@ -498,47 +526,38 @@ class FirebaseRepository(private val context: Context) {
             correctedScientificName?.let { updateData["currentIdentification.scientificName"] = it }
             correctedCommonName?.let { updateData["currentIdentification.commonName"] = it }
 
+            // 🔹 Step 2: Update the document
             docRef.update(updateData).await()
 
-            // ✅ If correct, decide whether to send to trainingData or EndangeredData
-            // ✅ If correct, decide whether to send to trainingData or EndangeredData
+            // 🔹 Step 3: Handle verification outcomes (same as before)
             if (isCorrect) {
                 val endangeredCategories = listOf(
-                    "extinct",
-                    "extinct in the wild",
-                    "critically endangered",
-                    "endangered"
+                    "extinct", "extinct in the wild", "critically endangered", "endangered"
                 )
                 val category = observation.iucnCategory?.lowercase()
 
                 if (category in endangeredCategories) {
-                    // Send to EndangeredData only
                     saveEndangeredDataToFirestore(observation, source = "admin_verified")
                     Log.d("AdminValidation", "⚠️ Skipped trainingData: ${observation.currentIdentification?.scientificName} is endangered")
                 } else {
-                    // Safe to include in trainingData
                     addToTrainingDataFromAdmin(
                         observation = observation,
                         adminId = adminId,
                         correctedScientificName = correctedScientificName,
                         correctedCommonName = correctedCommonName
                     )
-
-                    // ✅ Only call handleAdminTrainingData if NOT endangered
                     handleAdminTrainingData(observation, adminId, correctedScientificName, correctedCommonName)
                 }
             }
 
-
-
-            // ✅ Remove from flagQueue (clean up)
+            // ✅ Step 4: Clean up flag queue
             flagQueueCollection.document(observationId)
                 .update("status", "resolved")
                 .await()
 
             Log.d("AdminValidation", "✅ Admin verified observation $observationId")
-
             true
+
         } catch (e: Exception) {
             Log.e("AdminValidation", "❌ Failed admin validation: ${e.message}", e)
             false
