@@ -26,6 +26,8 @@ class FirebaseRepository(private val context: Context) {
     private val flagQueueCollection = db.collection("flagQueue")
     private val plantsCollection = db.collection("plants")
 
+    private val usersCollection = db.collection("users")
+
     /**
      * Upload a new plant observation with AI/PlantNet data and images.
      */
@@ -395,34 +397,32 @@ class FirebaseRepository(private val context: Context) {
     suspend fun getAllObservations(): List<Observation> {
         return try {
             val snapshot = observationsCollection
-                .orderBy("timestamp", Query.Direction.DESCENDING) // Get the most recent first
-                .limit(500) // IMPORTANT: Limit docs to avoid high cost & slow loads
+                .orderBy("timestamp", Query.Direction.DESCENDING)
+                .limit(500)
                 .get()
                 .await()
 
-            // Use Firestore's automatic object mapping to convert documents.
             snapshot.toObjects(Observation::class.java)
         } catch (e: Exception) {
             Log.e("FirebaseRepository", "Error fetching all observations: ${e.message}", e)
-            emptyList() // Return an empty list on error to prevent crashes
+            emptyList()
         }
     }
 
     // ✅ ADD THIS FOR THE USER'S HISTORY MAP
-    suspend fun getFullUserObservations(userId: String): List<Observation> {
+    suspend fun getUserObservations(userId: String): List<Observation> {
         return try {
-            val snapshot =  usersCollection
+            val snapshot = usersCollection
                 .document(userId)
                 .collection("observations")
                 .orderBy("timestamp", Query.Direction.DESCENDING)
                 .get()
                 .await()
 
-            // This automatically converts documents to the full Observation data class
             snapshot.toObjects(Observation::class.java)
         } catch (e: Exception) {
-            Log.e("FirebaseRepository", "Error fetching full user observations: ${e.message}", e)
-            emptyList() // Return an empty list on error to prevent crashes
+            Log.e("FirebaseRepository", "Error fetching user observations for $userId: ${e.message}", e)
+            emptyList()
         }
     }
 
@@ -482,9 +482,6 @@ class FirebaseRepository(private val context: Context) {
     }
 
 
-
-
-
     // ✅ Process admin validation (correct / wrong)
     // ✅ Improved Admin Validation Process
     suspend fun processAdminValidation(
@@ -495,50 +492,104 @@ class FirebaseRepository(private val context: Context) {
         correctedCommonName: String? = null
     ): Boolean {
         return try {
-            // 🔹 Step 1: Search across all users’ observation subcollections
-            val querySnapshot = FirebaseFirestore.getInstance()
-                .collectionGroup("observations")
+            val db = FirebaseFirestore.getInstance()
+
+            // 1) Find the pending flagQueue entry for this observation
+            val flagSnap = db.collection("flagQueue")
                 .whereEqualTo("observationId", observationId)
+                .whereEqualTo("status", "pending")
+                .limit(1)
                 .get()
                 .await()
 
-            val snapshot = querySnapshot.documents.firstOrNull()
-            if (snapshot == null) {
-                Log.w("AdminValidation", "⚠️ Observation $observationId not found")
+            if (flagSnap.isEmpty) {
+                Log.w("AdminValidation", "No pending flagQueue entry found for $observationId")
                 return false
             }
 
-            val observation = snapshot.toObject(Observation::class.java)
+            val flagDoc = flagSnap.documents.first()
+            val flagDocId = flagDoc.id
+            val userId = flagDoc.getString("userId")
+            if (userId.isNullOrEmpty()) {
+                Log.w("AdminValidation", "flagQueue entry missing userId for $observationId")
+                return false
+            }
+
+            // 2) Try to load the observation document at /users/{userId}/observations/{observationId}
+            val obsDocRef = db.collection("users")
+                .document(userId)
+                .collection("observations")
+                .document(observationId)
+
+            val obsSnap = obsDocRef.get().await()
+
+            // Fallback: if not found by document id, try searching by a field inside that user's observations
+            val observation: Observation? = if (obsSnap.exists()) {
+                obsSnap.toObject(Observation::class.java)
+            } else {
+                // fallback query in user's observations (in case doc id != observationId but field exists)
+                val fallback = db.collection("users")
+                    .document(userId)
+                    .collection("observations")
+                    .whereEqualTo("observationId", observationId)
+                    .limit(1)
+                    .get()
+                    .await()
+
+                val fallbackDoc = fallback.documents.firstOrNull()
+                if (fallbackDoc != null) {
+                    // replace obsDocRef with fallback doc reference
+                    // (we will update fallbackDoc.reference)
+                    fallbackDoc.toObject(Observation::class.java)
+                } else {
+                    null
+                }
+            }
+
             if (observation == null) {
-                Log.w("AdminValidation", "⚠️ Observation $observationId could not be parsed")
+                Log.w("AdminValidation", "Observation $observationId not found under user $userId")
                 return false
             }
 
-            val docRef = snapshot.reference // ✅ Points to the correct user path
+            // Determine the document reference we will update (use existing obsDocRef if exists, else fallback reference)
+            val docRefToUpdate = if (obsSnap.exists()) {
+                obsDocRef
+            } else {
+                // find fallback doc reference (we already did a query above, fetch again to obtain reference)
+                val fallbackQuery = db.collection("users")
+                    .document(userId)
+                    .collection("observations")
+                    .whereEqualTo("observationId", observationId)
+                    .limit(1)
+                    .get()
+                    .await()
+                fallbackQuery.documents.first().reference
+            }
 
-            val updateData = hashMapOf<String, Any>(
+            // 3) Build update payload for the observation
+            val updateData = mutableMapOf<String, Any>(
                 "verifiedBy" to adminId,
                 "isCorrect" to isCorrect,
-                "verifiedAt" to Timestamp.now(),
+                "verifiedAt" to com.google.firebase.Timestamp.now(),
                 "currentIdentification.status" to if (isCorrect) "admin_verified" else "admin_corrected"
             )
 
             correctedScientificName?.let { updateData["currentIdentification.scientificName"] = it }
             correctedCommonName?.let { updateData["currentIdentification.commonName"] = it }
 
-            // 🔹 Step 2: Update the document
-            docRef.update(updateData).await()
+            // 4) Update the observation document
+            docRefToUpdate.update(updateData).await()
 
-            // 🔹 Step 3: Handle verification outcomes (same as before)
+            // 5) Run your endangered / training-data logic AFTER we have the observation object
             if (isCorrect) {
                 val endangeredCategories = listOf(
                     "extinct", "extinct in the wild", "critically endangered", "endangered"
                 )
                 val category = observation.iucnCategory?.lowercase()
-
                 if (category in endangeredCategories) {
+                    // ensure this function exists and accepts Observation
                     saveEndangeredDataToFirestore(observation, source = "admin_verified")
-                    Log.d("AdminValidation", "⚠️ Skipped trainingData: ${observation.currentIdentification?.scientificName} is endangered")
+                    Log.d("AdminValidation", "Skipped trainingData: ${observation.currentIdentification?.scientificName} is endangered")
                 } else {
                     addToTrainingDataFromAdmin(
                         observation = observation,
@@ -548,21 +599,36 @@ class FirebaseRepository(private val context: Context) {
                     )
                     handleAdminTrainingData(observation, adminId, correctedScientificName, correctedCommonName)
                 }
+            } else {
+                // If admin corrected the identification, you may also wish to add corrected data to training.
+                addToTrainingDataFromAdmin(
+                    observation = observation,
+                    adminId = adminId,
+                    correctedScientificName = correctedScientificName,
+                    correctedCommonName = correctedCommonName
+                )
             }
 
-            // ✅ Step 4: Clean up flag queue
-            flagQueueCollection.document(observationId)
-                .update("status", "resolved")
+            // 6) Update the flagQueue entry to mark as resolved + attach validator info
+            db.collection("flagQueue").document(flagDocId)
+                .update(
+                    mapOf(
+                        "status" to "resolved",
+                        "validatedBy" to adminId,
+                        "validatedAt" to com.google.firebase.Timestamp.now(),
+                        "validationResult" to if (isCorrect) "correct" else "corrected"
+                    )
+                )
                 .await()
 
-            Log.d("AdminValidation", "✅ Admin verified observation $observationId")
+            Log.d("AdminValidation", "Admin validation completed for $observationId (user: $userId)")
             true
-
         } catch (e: Exception) {
-            Log.e("AdminValidation", "❌ Failed admin validation: ${e.message}", e)
+            Log.e("AdminValidation", "Failed admin validation for $observationId: ${e.message}", e)
             false
         }
     }
+
 
     private suspend fun addToTrainingDataFromAdmin(
 

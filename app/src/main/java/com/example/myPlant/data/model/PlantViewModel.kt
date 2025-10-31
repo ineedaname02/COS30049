@@ -110,7 +110,7 @@ class PlantViewModel(
             _loadingMessage.value = "Fetching your observations..."
             try {
                 // This calls the new function we will add to the repository
-                val observations = firebaseRepository.getFullUserObservations(userId)
+                val observations = firebaseRepository.getUserObservations(userId)
                 _userObservations.value = observations
             } catch (e: Exception) {
                 _error.value = "Error fetching your observations: ${e.message}"
