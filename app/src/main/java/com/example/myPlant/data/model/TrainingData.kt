@@ -15,5 +15,6 @@ data class TrainingData(
     val geolocation: GeoLocation? = null,
     val isActive: Boolean = true,
     val sourceApi: String? = null,
+    val iucnCategory: String? = null, // ✅ ADD THIS FIELD
     val isEndangered: Boolean = false // <-- optional flag
 )

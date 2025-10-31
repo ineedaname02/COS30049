@@ -24,6 +24,7 @@ import androidx.core.view.WindowCompat
 import com.google.firebase.auth.FirebaseAuth
 import com.example.myPlant.ui.home.HomeFragment
 import com.example.myPlant.data.local.UserPreferences
+import com.example.myPlant.data.repository.Graph
 
 class MainActivity : AppCompatActivity() {
 
@@ -167,7 +168,7 @@ class MainActivity : AppCompatActivity() {
                 R.id.nav_slideshow,
                 R.id.nav_history,
                 R.id.nav_admin_dashboard,
-                R.id.nav_plant_location_map  // ✅ Added plant location map
+                R.id.nav_training_data_map  // ✅ Added plant location map
             ), drawerLayout
         )
 

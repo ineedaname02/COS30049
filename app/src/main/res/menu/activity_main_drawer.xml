@@ -22,14 +22,9 @@
             android:title="@string/menu_slideshow" />
 
         <item
-            android:id="@+id/action_global_nav_plant_location_map"
+            android:id="@+id/nav_training_data_map"
             android:icon="@android:drawable/ic_dialog_map"
             android:title="Global Plant Map" />
-        <!-- ADD THIS NEW ITEM FOR THE USER'S HISTORY -->
-        <!-- <item
-            android:id="@+id/action_global_nav_my_observations_map"
-            android:icon="@android:drawable/ic_menu_myplaces"
-            android:title="My Observation History" /> -->
     </group>
 
     <group

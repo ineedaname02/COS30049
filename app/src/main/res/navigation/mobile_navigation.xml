@@ -42,34 +42,10 @@
         tools:layout="@layout/fragment_plant_verification" />
 
     <fragment
-        android:id="@+id/nav_plant_location_map"
+        android:id="@+id/nav_training_data_map"
         android:name="com.example.myPlant.ui.plantlocationmap.PlantLocationMapFragment"
-        android:label="Plant Location Map"
-        tools:layout="@layout/fragment_plant_location_map" >
-        <!-- ✅ ADD THIS ARGUMENT -->
-        <argument
-            android:name="mapMode"
-            app:argType="string"
-            android:defaultValue="GLOBAL" />
-    </fragment>
-    <action
-        android:id="@+id/action_global_nav_plant_location_map"
-        app:destination="@id/nav_plant_location_map"
-        app:launchSingleTop="true"
-        app:popUpTo="@id/nav_home">
-        <!-- This action uses the default "GLOBAL" mode -->
-    </action>
-    <!-- ✅ ADD THIS NEW ACTION FOR THE USER HISTORY MAP -->
-    <action
-        android:id="@+id/action_global_nav_my_observations_map"
-        app:destination="@id/nav_plant_location_map"
-        app:launchSingleTop="true"
-        app:popUpTo="@id/nav_home" >
-        <!-- This action explicitly passes the "MY_HISTORY" mode -->
-        <argument
-            android:name="mapMode"
-            android:defaultValue="MY_HISTORY" />
-    </action>
+        android:label="Verified Plant Map"
+        tools:layout="@layout/fragment_training_data_map" />
 
     <fragment
         android:id="@+id/nav_logout"

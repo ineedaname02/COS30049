@@ -261,6 +261,7 @@ class FirebaseRepository(private val context: Context) {
                 verificationMethod = "auto_confidence",
                 confidenceScore = topSuggestion.confidence,
                 geolocation = observation.geolocation,
+                iucnCategory = observation.iucnCategory, // ✅ COPY THE FIELD HERE
                 isActive = true,
                 sourceApi = topSuggestion.source
             )
@@ -317,8 +318,6 @@ class FirebaseRepository(private val context: Context) {
         updateUserContributionStats(userId, "flagsSubmitted")
         return "Flag submitted for observation $observationId"
     }
-
-
 
     suspend fun confirmObservation(
         observationId: String,
@@ -881,6 +880,22 @@ class FirebaseRepository(private val context: Context) {
 
         Log.i("EndangeredRedirect", "🌱 Redirected ${observation.currentIdentification?.scientificName} → EndangeredData")
 
+    }
+
+    /**
+     * Fetches all documents from the `trainingData` collection for map display.
+     */
+    suspend fun getTrainingDataForMap(): List<TrainingData> {
+        return try {
+            val snapshot = trainingDataCollection
+                .whereNotEqualTo("geolocation", null) // Only get items with a location
+                .get()
+                .await()
+            snapshot.toObjects(TrainingData::class.java)
+        } catch (e: Exception) {
+            Log.e("FirebaseRepo-Map", "Error fetching training data for map", e)
+            emptyList() // Return an empty list on error
+        }
     }
 
 }

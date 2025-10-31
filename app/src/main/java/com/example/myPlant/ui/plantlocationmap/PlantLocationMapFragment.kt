@@ -3,17 +3,14 @@ package com.example.myPlant.ui.plantlocationmap
 import android.graphics.Color
 import android.os.Bundle
 import android.util.Log
-import android.view.*
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+import androidx.appcompat.widget.SearchView // Use the correct SearchView
 import androidx.fragment.app.Fragment
-import androidx.fragment.app.activityViewModels
-import androidx.navigation.fragment.navArgs
+import androidx.fragment.app.viewModels // Use the correct 'by viewModels'
 import com.example.myPlant.R
-import com.example.myPlant.BuildConfig
-import com.example.myPlant.data.model.Observation
-import com.example.myPlant.data.model.PlantViewModel
-import com.example.myPlant.data.model.PlantViewModelFactory
-import com.example.myPlant.data.repository.FirebaseRepository
-import com.example.myPlant.data.repository.PlantRepository
+import com.example.myPlant.data.model.TrainingData
 import com.google.android.gms.maps.*
 import com.google.android.gms.maps.model.*
 import com.google.android.material.switchmaterial.SwitchMaterial
@@ -21,173 +18,144 @@ import com.google.maps.android.heatmaps.Gradient
 import com.google.maps.android.heatmaps.HeatmapTileProvider
 import java.text.SimpleDateFormat
 import java.util.*
-import androidx.navigation.fragment.findNavController
-import com.google.android.gms.maps.MapsInitializer
 
 class PlantLocationMapFragment : Fragment(), OnMapReadyCallback {
 
     private lateinit var googleMap: GoogleMap
     private lateinit var heatmapToggle: SwitchMaterial
+    private lateinit var searchView: SearchView
+
     private var isHeatmapMode = true
     private var isMapReady = false
     private var heatmapOverlay: TileOverlay? = null
 
-    private val viewModel: PlantViewModel by activityViewModels {
-        PlantViewModelFactory(
-            plantRepository = PlantRepository(BuildConfig.PLANTNET_API_KEY),
-            firebaseRepository = FirebaseRepository(requireContext())
-        )
-    }
-
-    private val args: PlantLocationMapFragmentArgs by navArgs()
-    private var currentMapMode: String = "GLOBAL" // A reliable variable to hold the true mode
+    // ✅ Use the new, dedicated ViewModel for this fragment ONLY.
+    private val viewModel: TrainingMapViewModel by viewModels()
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
     ): View {
-        val view = inflater.inflate(R.layout.fragment_plant_location_map, container, false)
-        heatmapToggle = view.findViewById(R.id.toggle_heatmap)
-
-        // **DETERMINE THE TRUE MODE HERE, ONCE.**
-        // This is the failsafe check that bypasses the argument bug.
-        val previousDestinationId = findNavController().previousBackStackEntry?.destination?.id
-        currentMapMode = if (previousDestinationId == R.id.action_global_nav_my_observations_map) {
-            "MY_HISTORY"
-        } else {
-            "GLOBAL" // Default to GLOBAL for all other cases
-        }
-        Log.d("PlantLocationMap", "MODE DETERMINED in onCreateView: $currentMapMode")
-
+        // Use a clean layout. If you don't have this, we can create it.
+        val view = inflater.inflate(R.layout.fragment_training_data_map, container, false)
+        heatmapToggle = view.findViewById(R.id.training_map_toggle_heatmap)
+        searchView = view.findViewById(R.id.map_search_view)
         return view
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-
         MapsInitializer.initialize(requireContext(), MapsInitializer.Renderer.LATEST) { renderer ->
-            Log.d("PlantLocationMap", "Maps renderer initialized: $renderer")
+            Log.d("MapInitializer", "Using Google Maps renderer: ${renderer.name}")
         }
 
-        setupMap() // This will call onMapReady where data is loaded
-
-        // **ALL UI LOGIC STAYS IN onViewCreated**
-        // This ensures the heatmap toggle is correctly managed every time the view is created.
-        if (currentMapMode == "MY_HISTORY") {
-            isHeatmapMode = false // History map shows markers
-            heatmapToggle.visibility = View.GONE
-        } else { // GLOBAL mode
-            isHeatmapMode = true // Global map shows heatmap
-            heatmapToggle.visibility = View.VISIBLE
-            heatmapToggle.isChecked = true
-
-            // Set up the listener only for the global map
-            heatmapToggle.setOnCheckedChangeListener { _, isChecked ->
-                isHeatmapMode = isChecked
-                if (isMapReady) {
-                    updateMapDisplay(viewModel.allObservations.value)
-                }
-            }
-        }
-    }
-
-    private fun setupMap() {
-        val mapFragment = childFragmentManager.findFragmentById(R.id.map) as? SupportMapFragment
+        val mapFragment = childFragmentManager.findFragmentById(R.id.training_map_container) as? SupportMapFragment
         mapFragment?.getMapAsync(this)
+
+        setupUIListeners()
     }
 
     override fun onMapReady(map: GoogleMap) {
         googleMap = map
         isMapReady = true
+        googleMap.uiSettings.isZoomControlsEnabled = true
 
-        // **ALL DATA LOADING LOGIC STAYS IN onMapReady**
-        // Remove previous observers to prevent data contamination from old sessions.
-        viewModel.allObservations.removeObservers(viewLifecycleOwner)
-        viewModel.userObservations.removeObservers(viewLifecycleOwner)
-
-        Log.d("PlantLocationMap", "Loading data for mode: $currentMapMode")
-
-        if (currentMapMode == "MY_HISTORY") {
-            // Load and observe user data
-            viewModel.userObservations.observe(viewLifecycleOwner) { observations ->
-                Log.d("PlantLocationMap", "Updating map with ${observations?.size ?: 0} user observations.")
-                updateMapDisplay(observations)
-            }
-            viewModel.loadUserObservations()
-        } else { // GLOBAL mode
-            // Load and observe global data
-            viewModel.allObservations.observe(viewLifecycleOwner) { observations ->
-                Log.d("PlantLocationMap", "Updating map with ${observations?.size ?: 0} global observations.")
-                updateMapDisplay(observations)
-            }
-            viewModel.loadAllObservations()
+        googleMap.setInfoWindowAdapter(CustomInfoWindowAdapter(requireContext()))
+        // Observe the LiveData from our new ViewModel
+        viewModel.trainingDataForMap.observe(viewLifecycleOwner) { trainingData ->
+            updateMapDisplay(trainingData)
         }
+
+        // Load the data
+        viewModel.loadTrainingDataForMap()
     }
 
-    private fun updateMapDisplay(observations: List<Observation>?) {
-        if (!::googleMap.isInitialized || !isMapReady || observations == null) {
-            Log.w("PlantLocationMap", "Cannot update map, not ready or observations are null.")
-            return
+    private fun setupUIListeners() {
+        heatmapToggle.isChecked = isHeatmapMode
+        heatmapToggle.setOnCheckedChangeListener { _, isChecked ->
+            isHeatmapMode = isChecked
+            if (isMapReady) {
+                updateMapDisplay(viewModel.trainingDataForMap.value)
+            }
         }
-        googleMap.clear()
-        heatmapOverlay?.remove() // Explicitly remove old heatmap overlay
 
-        if (observations.isEmpty()) {
-            Log.d("PlantLocationMap", "No observations to display.")
+        searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
+            override fun onQueryTextSubmit(query: String?): Boolean {
+                viewModel.filterMapData(query)
+                searchView.clearFocus()
+                return true
+            }
+
+            override fun onQueryTextChange(newText: String?): Boolean {
+                viewModel.filterMapData(newText)
+                return true
+            }
+        })
+    }
+
+    private fun updateMapDisplay(data: List<TrainingData>?) {
+        if (!isMapReady || data == null) return
+        googleMap.clear()
+        heatmapOverlay?.remove()
+
+        if (data.isEmpty()) {
+            Log.d("TrainingDataMap", "No training data to display.")
             return
         }
 
         if (isHeatmapMode) {
-            addHeatmapToMap(observations)
+            addHeatmapToMap(data)
         } else {
-            addMarkersToMap(observations)
+            addMarkersToMap(data)
         }
     }
 
-    private fun addMarkersToMap(observations: List<Observation>) {
+    private fun addMarkersToMap(data: List<TrainingData>) {
         val boundsBuilder = LatLngBounds.Builder()
-        for (obs in observations) {
-            val lat = obs.geolocation?.lat
-            val lng = obs.geolocation?.lng
+        for (item in data) {
+            val lat = item.geolocation?.lat
+            val lng = item.geolocation?.lng
             if (lat != null && lng != null) {
                 val position = LatLng(lat, lng)
-                val name = obs.currentIdentification.scientificName.ifEmpty { "Unknown" }
-                val snippet = obs.timestamp?.toDate()?.let {
-                    SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(it)
-                } ?: "Observation"
-                googleMap.addMarker(MarkerOptions().position(position).title(name).snippet(snippet))
+                val markerTitle = item.plantId.ifEmpty { "Unknown" }
+
+                // Create the marker and add the TrainingData object as a tag
+                val marker = googleMap.addMarker(
+                    MarkerOptions()
+                        .position(position)
+                        .title(markerTitle)
+                )
+                marker?.tag = item // ✅ ATTACH THE ENTIRE DATA OBJECT TO THE MARKER
                 boundsBuilder.include(position)
             }
         }
         try {
-            googleMap.animateCamera(CameraUpdateFactory.newLatLngBounds(boundsBuilder.build(), 120))
+            if (data.isNotEmpty()) {
+                googleMap.animateCamera(CameraUpdateFactory.newLatLngBounds(boundsBuilder.build(), 120))
+            }
         } catch (e: IllegalStateException) {
-            // Happens if no markers were added
-            Log.w("PlantLocationMap", "Could not animate camera for markers: ${e.message}")
+            Log.w("TrainingDataMap", "Could not animate camera for markers: ${e.message}")
         }
     }
 
-    private fun addHeatmapToMap(observations: List<Observation>) {
-        val latLngs = observations.mapNotNull { obs ->
-            obs.geolocation?.let { LatLng(it.lat, it.lng) }
-        }
+    private fun addHeatmapToMap(data: List<TrainingData>) {
+        val latLngs = data.mapNotNull { it.geolocation?.let { geo -> LatLng(geo.lat, geo.lng) } }
         if (latLngs.isEmpty()) return
 
         val gradient = Gradient(
-            intArrayOf(Color.BLUE, Color.YELLOW, Color.RED),
-            floatArrayOf(0.2f, 0.6f, 1.0f)
+            intArrayOf(Color.BLUE, Color.GREEN, Color.RED),
+            floatArrayOf(0.2f, 0.5f, 0.9f)
         )
-        val provider = HeatmapTileProvider.Builder()
-            .data(latLngs)
-            .gradient(gradient)
-            .radius(50)
-            .build()
+        val provider = HeatmapTileProvider.Builder().data(latLngs).gradient(gradient).radius(50).build()
         heatmapOverlay = googleMap.addTileOverlay(TileOverlayOptions().tileProvider(provider))
 
         try {
             val bounds = LatLngBounds.Builder().apply { latLngs.forEach { include(it) } }.build()
             googleMap.animateCamera(CameraUpdateFactory.newLatLngBounds(bounds, 100))
         } catch (e: IllegalStateException) {
-            Log.w("PlantLocationMap", "Could not animate camera for heatmap: ${e.message}")
+            Log.w("TrainingDataMap", "Could not animate camera for heatmap: ${e.message}")
         }
     }
+
+
 }
+    
