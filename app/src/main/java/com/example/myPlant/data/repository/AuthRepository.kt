@@ -14,6 +14,15 @@ import com.example.myPlant.data.model.PrivacyPreferences
 import com.example.myPlant.data.model.AISuggestion
 import kotlinx.coroutines.tasks.await
 import kotlin.Result
+import com.google.firebase.auth.PhoneAuthOptions
+import com.google.firebase.auth.PhoneAuthProvider
+import com.google.firebase.auth.MultiFactorResolver
+import com.google.firebase.auth.PhoneMultiFactorGenerator
+import java.util.concurrent.TimeUnit
+import android.app.Activity
+import com.google.firebase.auth.FirebaseAuthMultiFactorException
+import com.google.firebase.auth.PhoneAuthCredential
+
 
 class AuthRepository {
     private val auth = FirebaseAuth.getInstance()
@@ -68,16 +77,21 @@ class AuthRepository {
     suspend fun loginUser(email: String, password: String): Result<FirebaseUser> {
         return try {
             val authResult = auth.signInWithEmailAndPassword(email, password).await()
-            val user = authResult.user ?: throw Exception("Login failed")
-
-            // Update last login timestamp
-            updateLastLogin(user.uid)
-
-            Result.success(user)
+            Result.success(authResult.user!!)
         } catch (e: Exception) {
-            Result.failure(e)
+            if (e is FirebaseAuthMultiFactorException) {
+                // Requires SMS verification
+                val resolver = e.resolver
+                Result.failure(MultiFactorAuthRequired(resolver))
+            } else {
+                Result.failure(e)
+            }
         }
     }
+
+    // Custom wrapper for MFA flow
+    class MultiFactorAuthRequired(val resolver: MultiFactorResolver) : Exception()
+
 
     fun logout() {
         auth.signOut()
@@ -112,6 +126,38 @@ class AuthRepository {
     suspend fun resetPassword(email: String): Result<Unit> {
         return try {
             auth.sendPasswordResetEmail(email).await()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    fun enrollSecondFactor(
+        phoneNumber: String,
+        activity: Activity,
+        callbacks: PhoneAuthProvider.OnVerificationStateChangedCallbacks
+    ) {
+        val user = auth.currentUser
+        if (user == null) {
+            throw IllegalStateException("No user is currently signed in to enroll MFA.")
+        }
+
+        val options = PhoneAuthOptions.newBuilder(auth)
+            .setPhoneNumber(phoneNumber)
+            .setTimeout(60L, TimeUnit.SECONDS)
+            .setActivity(activity)
+            .setCallbacks(callbacks)
+            .build()
+        PhoneAuthProvider.verifyPhoneNumber(options)
+
+    }
+
+    // Complete enrollment using the received SMS code
+    suspend fun finalizeEnrollment(verificationId: String, smsCode: String): Result<Unit> {
+        return try {
+            val credential = PhoneAuthProvider.getCredential(verificationId, smsCode)
+            val assertion = PhoneMultiFactorGenerator.getAssertion(credential)
+            auth.currentUser!!.multiFactor.enroll(assertion, "Phone MFA").await()
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
