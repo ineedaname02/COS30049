@@ -28,7 +28,7 @@ import com.google.firebase.auth.PhoneMultiFactorGenerator
 import com.google.firebase.auth.PhoneMultiFactorInfo
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.tasks.await
-
+import com.google.firebase.auth.FirebaseAuth
 
 
 class LoginActivity : AppCompatActivity() {
@@ -40,6 +40,10 @@ class LoginActivity : AppCompatActivity() {
     private lateinit var loginButton: Button
     private lateinit var registerButton: Button
     private lateinit var progressBar: ProgressBar
+
+    companion object {
+        var pendingResolver: MultiFactorResolver? = null
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -79,9 +83,18 @@ class LoginActivity : AppCompatActivity() {
 
         // Check if user is already logged in using repository
         if (authRepository.isUserLoggedIn) {
-            navigateToMainActivity()
+            val user = FirebaseAuth.getInstance().currentUser
+            if (user != null && user.multiFactor.enrolledFactors.isEmpty()) {
+                // Force user to complete MFA setup
+                val intent = Intent(this, com.example.myPlant.ui.auth.EnableMfaActivity::class.java)
+                startActivity(intent)
+                finish()
+            } else {
+                navigateToMainActivity()
+            }
             return
         }
+
 
         loginButton.setOnClickListener {
             loginUser()
@@ -107,50 +120,30 @@ class LoginActivity : AppCompatActivity() {
             val loginResult = authRepository.loginUser(email, password)
 
             if (loginResult.isSuccess) {
-                // normal login flow (already implemented)
+                val user = FirebaseAuth.getInstance().currentUser
+
+                if (user != null && user.multiFactor.enrolledFactors.isEmpty()) {
+                    // MFA not enabled — block access and force setup
+                    Toast.makeText(this@LoginActivity, "You must enable MFA before logging in.", Toast.LENGTH_LONG).show()
+
+                    val intent = Intent(this@LoginActivity, com.example.myPlant.ui.auth.EnableMfaActivity::class.java)
+                    startActivity(intent)
+                    finish()
+                } else {
+                    // MFA already enabled — proceed normally
+                    navigateToMainActivity()
+                }
+
             } else {
                 val ex = loginResult.exceptionOrNull()
                 if (ex is AuthRepository.MultiFactorAuthRequired) {
-                    // Trigger SMS second factor
-                    val resolver = ex.resolver
-                    val phoneFactor = resolver.hints[0] as PhoneMultiFactorInfo
-
-                    val options = PhoneAuthOptions.newBuilder()
-                        .setMultiFactorHint(phoneFactor)
-                        .setTimeout(60L, TimeUnit.SECONDS)
-                        .setActivity(this@LoginActivity)
-                        .setCallbacks(object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
-                            override fun onVerificationCompleted(credential: PhoneAuthCredential) {
-                                lifecycleScope.launch {
-                                    try {
-                                        resolver.resolveSignIn(
-                                            PhoneMultiFactorGenerator.getAssertion(credential)
-                                        ).await()
-                                        navigateToMainActivity()
-                                    } catch (ex: Exception) {
-                                        Toast.makeText(this@LoginActivity, "MFA failed: ${ex.message}", Toast.LENGTH_SHORT).show()
-                                    }
-                                }
-                            }
-
-                            override fun onVerificationFailed(e: FirebaseException) {
-                                Toast.makeText(this@LoginActivity, "Verification failed: ${e.message}", Toast.LENGTH_SHORT).show()
-                            }
-
-                            override fun onCodeSent(verificationId: String, token: PhoneAuthProvider.ForceResendingToken) {
-                                // show dialog for user to input SMS code
-                                showMfaCodeDialog(verificationId, resolver)
-                            }
-                        })
-                        .build()
-
-                    PhoneAuthProvider.verifyPhoneNumber(options)
+                    // Handle existing MFA challenge (SMS verification)
+                    // Example:
+                    handleMultiFactorChallenge(ex.resolver)
                 } else {
                     Toast.makeText(this@LoginActivity, "Login failed: ${ex?.message}", Toast.LENGTH_SHORT).show()
                 }
             }
-
-
             showLoading(false)
         }
     }
@@ -175,8 +168,12 @@ class LoginActivity : AppCompatActivity() {
             val result = authRepository.registerUser(email, password, displayName)
 
             if (result.isSuccess) {
-                Toast.makeText(this@LoginActivity, "Registered successfully!", Toast.LENGTH_SHORT).show()
-                navigateToMainActivity()
+                Toast.makeText(this@LoginActivity, "Registered successfully! Please set up MFA.", Toast.LENGTH_SHORT).show()
+
+                // Launch the MFA enrollment screen
+                val intent = Intent(this@LoginActivity, com.example.myPlant.ui.auth.EnableMfaActivity::class.java)
+                startActivity(intent)
+                finish()
             } else {
                 Toast.makeText(this@LoginActivity, "Registration failed: ${result.exceptionOrNull()?.message}", Toast.LENGTH_SHORT).show()
             }
@@ -220,5 +217,48 @@ class LoginActivity : AppCompatActivity() {
             .setNegativeButton("Cancel", null)
             .show()
     }
+
+    private fun handleMultiFactorChallenge(resolver: MultiFactorResolver) {
+        // Get the enrolled phone factor
+        val phoneFactor = resolver.hints
+            .filterIsInstance<PhoneMultiFactorInfo>()
+            .firstOrNull()
+
+        if (phoneFactor == null) {
+            Toast.makeText(this, "No phone factor found for MFA.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val options = PhoneAuthOptions.newBuilder()
+            .setMultiFactorSession(resolver.session)
+            .setActivity(this)
+            .setMultiFactorHint(phoneFactor)
+            .setTimeout(60L, TimeUnit.SECONDS)
+            .setCallbacks(object : PhoneAuthProvider.OnVerificationStateChangedCallbacks() {
+                override fun onVerificationCompleted(credential: PhoneAuthCredential) {
+                    lifecycleScope.launch {
+                        try {
+                            val assertion = PhoneMultiFactorGenerator.getAssertion(credential)
+                            resolver.resolveSignIn(assertion).await()
+                            navigateToMainActivity()
+                        } catch (e: Exception) {
+                            Toast.makeText(this@LoginActivity, "MFA failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                }
+
+                override fun onVerificationFailed(e: FirebaseException) {
+                    Toast.makeText(this@LoginActivity, "MFA verification failed: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+
+                override fun onCodeSent(verificationId: String, token: PhoneAuthProvider.ForceResendingToken) {
+                    showMfaCodeDialog(verificationId, resolver)
+                }
+            })
+            .build()
+
+        PhoneAuthProvider.verifyPhoneNumber(options)
+    }
+
 
 }
