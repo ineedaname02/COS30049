@@ -26,6 +26,8 @@ import com.example.myPlant.ui.home.HomeFragment
 import com.example.myPlant.data.local.UserPreferences
 import com.example.myPlant.data.repository.Graph
 import com.example.myPlant.ui.auth.EnableMfaActivity
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.messaging.FirebaseMessaging
 
 class MainActivity : AppCompatActivity() {
 
@@ -105,8 +107,8 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-    // Force status bar icons to be light (white) and status bar background to black for the whole app
-    WindowCompat.getInsetsController(window, window.decorView)?.isAppearanceLightStatusBars = false
+        // Force status bar icons to be light (white) and status bar background to black for the whole app
+        WindowCompat.getInsetsController(window, window.decorView)?.isAppearanceLightStatusBars = false
 
         val auth = FirebaseAuth.getInstance()
         val currentUser = auth.currentUser
@@ -118,7 +120,7 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-// 🔐 Check if user has MFA configured
+        //  Check if user has MFA configured
         val enrolledFactors = currentUser.multiFactor.enrolledFactors
         if (enrolledFactors.isEmpty()) {
             // No MFA enrolled → force user to set up MFA
@@ -127,6 +129,36 @@ class MainActivity : AppCompatActivity() {
             finish()
             return
         }
+
+        val firestore = FirebaseFirestore.getInstance()
+
+// Use the already-declared currentUser from above
+        if (currentUser != null) {
+            firestore.collection("users").document(currentUser.uid).get()
+                .addOnSuccessListener { document ->
+                    val role = document.getString("role")
+                    if (role == "admin") {
+                        FirebaseMessaging.getInstance().subscribeToTopic("admins")
+                            .addOnCompleteListener { task ->
+                                if (task.isSuccessful) {
+                                    println("✅ Admin subscribed to 'admins' topic")
+                                } else {
+                                    println("❌ Failed to subscribe: ${task.exception?.message}")
+                                }
+                            }
+                    } else {
+                        FirebaseMessaging.getInstance().unsubscribeFromTopic("admins")
+                            .addOnCompleteListener {
+                                println("🚫 Unsubscribed non-admin user from 'admins'")
+                            }
+                    }
+                }
+                .addOnFailureListener { e ->
+                    println("❌ Failed to get role: ${e.message}")
+                }
+        }
+
+
 
 
         setSupportActionBar(binding.appBarMain.toolbar)
@@ -213,12 +245,12 @@ class MainActivity : AppCompatActivity() {
         val headerView = navView.getHeaderView(0)
         val userEmailTextView = headerView.findViewById<android.widget.TextView>(R.id.nav_header_user_email)
         val userNameTextView = headerView.findViewById<android.widget.TextView>(R.id.nav_header_user_name)
-        
+
         // Set user email from Firebase Auth
         currentUser?.email?.let { email ->
             userEmailTextView?.text = email
         }
-        
+
         // Set user name (you can customize this based on your user data)
         currentUser?.displayName?.let { displayName ->
             userNameTextView?.text = "Welcome, $displayName"
@@ -226,13 +258,13 @@ class MainActivity : AppCompatActivity() {
             userNameTextView?.text = "Welcome Back"
         }
 
-    // ---------------------------
-    // ADMIN MENU VISIBILITY
-    // ---------------------------
-    val navMenu = navView.menu
-    val role = userPrefs.userRole
-    val isAdmin = role == "admin"
-    navMenu.setGroupVisible(R.id.admin_group, isAdmin)
+        // ---------------------------
+        // ADMIN MENU VISIBILITY
+        // ---------------------------
+        val navMenu = navView.menu
+        val role = userPrefs.userRole
+        val isAdmin = role == "admin"
+        navMenu.setGroupVisible(R.id.admin_group, isAdmin)
     }
 
     // ---------------------------

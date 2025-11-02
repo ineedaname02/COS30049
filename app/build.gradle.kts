@@ -101,11 +101,15 @@ dependencies {
 
     // ✅ Firebase (BoM manages versions)
     implementation(platform("com.google.firebase:firebase-bom:32.7.0"))
+
     implementation("com.google.firebase:firebase-analytics-ktx")
     implementation("com.google.firebase:firebase-firestore-ktx")
     implementation("com.google.firebase:firebase-auth-ktx")
     implementation("com.google.firebase:firebase-storage-ktx")
-    implementation("com.google.firebase:firebase-database:20.3.0")
+    implementation("com.google.firebase:firebase-database-ktx")
+    implementation("com.google.firebase:firebase-functions-ktx")
+    implementation("com.google.firebase:firebase-messaging-ktx")
+
 
     // ✅ Google Maps & Location
     implementation("com.google.maps.android:maps-utils-ktx:3.4.0")
