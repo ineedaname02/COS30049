@@ -84,16 +84,22 @@ class LoginActivity : AppCompatActivity() {
         // Check if user is already logged in using repository
         if (authRepository.isUserLoggedIn) {
             val user = FirebaseAuth.getInstance().currentUser
-            if (user != null && user.multiFactor.enrolledFactors.isEmpty()) {
-                // Force user to complete MFA setup
-                val intent = Intent(this, com.example.myPlant.ui.auth.EnableMfaActivity::class.java)
-                startActivity(intent)
-                finish()
-            } else {
-                navigateToMainActivity()
+
+            user?.reload()?.addOnCompleteListener { task ->
+                val reloadedUser = FirebaseAuth.getInstance().currentUser
+                if (reloadedUser != null && reloadedUser.multiFactor.enrolledFactors.isEmpty()) {
+                    // MFA not set — force them to finish setup
+                    Toast.makeText(this, "Please complete MFA setup before accessing the app.", Toast.LENGTH_LONG).show()
+                    val intent = Intent(this, com.example.myPlant.ui.auth.EnableMfaActivity::class.java)
+                    startActivity(intent)
+                    finish()
+                } else {
+                    navigateToMainActivity()
+                }
             }
             return
         }
+
 
 
         loginButton.setOnClickListener {

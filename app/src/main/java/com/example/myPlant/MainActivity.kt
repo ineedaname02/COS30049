@@ -25,6 +25,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.example.myPlant.ui.home.HomeFragment
 import com.example.myPlant.data.local.UserPreferences
 import com.example.myPlant.data.repository.Graph
+import com.example.myPlant.ui.auth.EnableMfaActivity
 
 class MainActivity : AppCompatActivity() {
 
@@ -109,12 +110,24 @@ class MainActivity : AppCompatActivity() {
 
         val auth = FirebaseAuth.getInstance()
         val currentUser = auth.currentUser
+
         if (currentUser == null) {
             // User not logged in → go to Login
             startActivity(Intent(this, LoginActivity::class.java))
             finish()
             return
         }
+
+// 🔐 Check if user has MFA configured
+        val enrolledFactors = currentUser.multiFactor.enrolledFactors
+        if (enrolledFactors.isEmpty()) {
+            // No MFA enrolled → force user to set up MFA
+            Toast.makeText(this, "Please complete MFA setup before continuing.", Toast.LENGTH_SHORT).show()
+            startActivity(Intent(this, EnableMfaActivity::class.java))
+            finish()
+            return
+        }
+
 
         setSupportActionBar(binding.appBarMain.toolbar)
 
