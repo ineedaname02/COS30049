@@ -24,19 +24,144 @@
         android:iconifiedByDefault="false"
         android:queryHint="Search plant by name..." />
 
-
     <!-- Heatmap Toggle Switch -->
+
     <com.google.android.material.switchmaterial.SwitchMaterial
         android:id="@+id/training_map_toggle_heatmap"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_gravity="bottom|start"
-        android:layout_marginStart="16dp"
-        android:layout_marginBottom="16dp"
-        android:background="#59000000"
-        android:padding="8dp"
+        android:layout_gravity="top|end"
+        android:layout_marginEnd="16dp"
+        android:layout_marginTop="80dp"
+        android:background="#2F000000"
+        android:padding="2dp"
         android:text="Heatmap"
         android:textColor="@android:color/white"
         android:textStyle="bold" />
 
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:orientation="vertical"
+        android:padding="8dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Filters"
+            android:textStyle="bold"
+            android:layout_gravity="center_horizontal"/>
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:scrollbars="none">
+
+            <com.google.android.material.chip.ChipGroup
+                android:id="@+id/rarity_filter_chips"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                app:singleSelection="true">
+
+                <!-- Existing Chips -->
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chip_all"
+                    style="@style/Widget.MaterialComponents.Chip.Filter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:checked="true"
+                    android:text="All" />
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chip_critically_endangered"
+                    style="@style/Widget.MaterialComponents.Chip.Filter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Critically Endangered" />
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chip_endangered"
+                    style="@style/Widget.MaterialComponents.Chip.Filter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Endangered" />
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chip_vulnerable"
+                    style="@style/Widget.MaterialComponents.Chip.Filter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Vulnerable" />
+
+                <!-- ✅ ADDING NEW CHIPS -->
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chip_extinct_in_wild"
+                    style="@style/Widget.MaterialComponents.Chip.Filter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Extinct in the Wild" />
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chip_extinct"
+                    style="@style/Widget.MaterialComponents.Chip.Filter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Extinct" />
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chip_near_threatened"
+                    style="@style/Widget.MaterialComponents.Chip.Filter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Near Threatened" />
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chip_least_concern"
+                    style="@style/Widget.MaterialComponents.Chip.Filter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Least Concern" />
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chip_data_deficient"
+                    style="@style/Widget.MaterialComponents.Chip.Filter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Data Deficient" />
+
+                <com.google.android.material.chip.Chip
+                    android:id="@+id/chip_not_evaluated"
+                    style="@style/Widget.MaterialComponents.Chip.Filter"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Not Evaluated" />
+
+            </com.google.android.material.chip.ChipGroup>
+
+        </HorizontalScrollView>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <Button
+                android:id="@+id/date_filter_button"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Filter by Date" />
+
+            <ImageButton
+                android:id="@+id/date_filter_reset_button"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:src="@android:drawable/ic_menu_close_clear_cancel"
+                android:contentDescription="Reset date filter"
+                android:visibility="gone" /> <!-- Initially hidden -->
+
+        </LinearLayout>
+    </LinearLayout>
 </FrameLayout>

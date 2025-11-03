@@ -29,8 +29,6 @@ data class Observation(
     val version: Int = 1
 )
 
-data class GeoLocation(val lat: Double = 0.0, val lng: Double = 0.0)
-
 data class CurrentIdentification(
     val plantId: String = "",
     val scientificName: String = "",

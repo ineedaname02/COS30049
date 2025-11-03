@@ -6,6 +6,14 @@
     android:padding="12dp"
     android:background="@drawable/info_window_background">
 
+    <ImageView
+        android:id="@+id/info_window_image"
+        android:layout_width="150dp"
+        android:layout_height="150dp"
+        android:layout_gravity="center_horizontal"
+        android:scaleType="centerCrop"
+        android:visibility="gone" />
+
     <TextView
         android:id="@+id/info_window_title"
         android:layout_width="wrap_content"
@@ -21,5 +29,4 @@
         android:layout_height="wrap_content"
         android:textColor="#2F2D2D"
         android:textSize="16sp" />
-
 </LinearLayout>

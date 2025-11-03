@@ -130,6 +130,8 @@ dependencies {
     implementation("org.tensorflow:tensorflow-lite:2.15.0")
     implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
 
+    //Image Loading for Map
+    implementation("com.github.bumptech.glide:glide:4.16.0")
 }
 
 apply(plugin = "com.google.gms.google-services")

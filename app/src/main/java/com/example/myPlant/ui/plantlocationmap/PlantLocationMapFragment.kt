@@ -6,40 +6,46 @@ import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import androidx.appcompat.widget.SearchView // Use the correct SearchView
+import androidx.appcompat.widget.SearchView
 import androidx.fragment.app.Fragment
-import androidx.fragment.app.viewModels // Use the correct 'by viewModels'
+import androidx.fragment.app.viewModels
+//import androidx.privacysandbox.tools.core.generator.build
 import com.example.myPlant.R
 import com.example.myPlant.data.model.TrainingData
+import com.example.myPlant.databinding.FragmentTrainingDataMapBinding
 import com.google.android.gms.maps.*
 import com.google.android.gms.maps.model.*
 import com.google.android.material.switchmaterial.SwitchMaterial
 import com.google.maps.android.heatmaps.Gradient
 import com.google.maps.android.heatmaps.HeatmapTileProvider
+import com.google.android.material.datepicker.MaterialDatePicker
 import java.text.SimpleDateFormat
 import java.util.*
+// Import java.util.Date for the date picker
+import java.util.Date as UtilDate
+import com.google.type.Date as GoogleDate
+import java.util.Calendar
 
 class PlantLocationMapFragment : Fragment(), OnMapReadyCallback {
 
-    private lateinit var googleMap: GoogleMap
-    private lateinit var heatmapToggle: SwitchMaterial
-    private lateinit var searchView: SearchView
+    // 1. ✅ DECLARE BINDING VARIABLES
+    private var _binding: FragmentTrainingDataMapBinding? = null
+    // This property is only valid between onCreateView and onDestroyView.
+    private val binding get() = _binding!!
 
+    private lateinit var googleMap: GoogleMap
     private var isHeatmapMode = true
     private var isMapReady = false
     private var heatmapOverlay: TileOverlay? = null
 
-    // ✅ Use the new, dedicated ViewModel for this fragment ONLY.
     private val viewModel: TrainingMapViewModel by viewModels()
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
     ): View {
-        // Use a clean layout. If you don't have this, we can create it.
-        val view = inflater.inflate(R.layout.fragment_training_data_map, container, false)
-        heatmapToggle = view.findViewById(R.id.training_map_toggle_heatmap)
-        searchView = view.findViewById(R.id.map_search_view)
-        return view
+        // 2. ✅ INFLATE THE LAYOUT USING VIEW BINDING
+        _binding = FragmentTrainingDataMapBinding.inflate(inflater, container, false)
+        return binding.root
     }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
@@ -51,37 +57,70 @@ class PlantLocationMapFragment : Fragment(), OnMapReadyCallback {
         val mapFragment = childFragmentManager.findFragmentById(R.id.training_map_container) as? SupportMapFragment
         mapFragment?.getMapAsync(this)
 
+        // These lines will now work correctly
+        binding.rarityFilterChips.setOnCheckedChangeListener { group, checkedId ->
+            val newFilter = when (checkedId) {
+                R.id.chip_critically_endangered -> "Critically Endangered"
+                R.id.chip_endangered -> "Endangered"
+                R.id.chip_vulnerable -> "Vulnerable"
+                R.id.chip_extinct -> "Extinct"
+                R.id.chip_extinct_in_wild -> "Extinct in the Wild"
+                R.id.chip_near_threatened -> "Near Threatened"
+                R.id.chip_least_concern -> "Least Concern"
+                R.id.chip_data_deficient -> "Data Deficient"
+                R.id.chip_not_evaluated -> "Not Evaluated"
+                else -> "All"
+            }
+            viewModel.setRarityFilter(newFilter)
+        }
+
+        binding.dateFilterButton.setOnClickListener {
+            showDateRangePicker()
+        }
+        binding.dateFilterResetButton.setOnClickListener {
+            // Reset the button's text to its default state
+            binding.dateFilterButton.text = "Filter by Date"
+            // Hide the reset button again
+            binding.dateFilterResetButton.visibility = View.GONE
+            // Call the new function in the ViewModel to clear the filter
+            viewModel.clearDateRangeFilter()
+        }
+
         setupUIListeners()
+    }
+
+    // 3. ✅ CLEAN UP THE BINDING IN onDestroyView
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding = null
     }
 
     override fun onMapReady(map: GoogleMap) {
         googleMap = map
         isMapReady = true
         googleMap.uiSettings.isZoomControlsEnabled = true
-
         googleMap.setInfoWindowAdapter(CustomInfoWindowAdapter(requireContext()))
-        // Observe the LiveData from our new ViewModel
+
         viewModel.trainingDataForMap.observe(viewLifecycleOwner) { trainingData ->
             updateMapDisplay(trainingData)
         }
-
-        // Load the data
         viewModel.loadTrainingDataForMap()
     }
 
     private fun setupUIListeners() {
-        heatmapToggle.isChecked = isHeatmapMode
-        heatmapToggle.setOnCheckedChangeListener { _, isChecked ->
+        // Use 'binding' to access views
+        binding.trainingMapToggleHeatmap.isChecked = isHeatmapMode
+        binding.trainingMapToggleHeatmap.setOnCheckedChangeListener { _, isChecked ->
             isHeatmapMode = isChecked
             if (isMapReady) {
                 updateMapDisplay(viewModel.trainingDataForMap.value)
             }
         }
 
-        searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
+        binding.mapSearchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
             override fun onQueryTextSubmit(query: String?): Boolean {
                 viewModel.filterMapData(query)
-                searchView.clearFocus()
+                binding.mapSearchView.clearFocus()
                 return true
             }
 
@@ -110,7 +149,9 @@ class PlantLocationMapFragment : Fragment(), OnMapReadyCallback {
     }
 
     private fun addMarkersToMap(data: List<TrainingData>) {
+        googleMap.clear()
         val boundsBuilder = LatLngBounds.Builder()
+
         for (item in data) {
             val lat = item.geolocation?.lat
             val lng = item.geolocation?.lng
@@ -118,22 +159,16 @@ class PlantLocationMapFragment : Fragment(), OnMapReadyCallback {
                 val position = LatLng(lat, lng)
                 val markerTitle = item.plantId.ifEmpty { "Unknown" }
 
-                // Create the marker and add the TrainingData object as a tag
                 val marker = googleMap.addMarker(
-                    MarkerOptions()
-                        .position(position)
-                        .title(markerTitle)
+                    MarkerOptions().position(position).title(markerTitle)
                 )
-                marker?.tag = item // ✅ ATTACH THE ENTIRE DATA OBJECT TO THE MARKER
+                marker?.tag = item // This is the critical link!
+
                 boundsBuilder.include(position)
             }
         }
-        try {
-            if (data.isNotEmpty()) {
-                googleMap.animateCamera(CameraUpdateFactory.newLatLngBounds(boundsBuilder.build(), 120))
-            }
-        } catch (e: IllegalStateException) {
-            Log.w("TrainingDataMap", "Could not animate camera for markers: ${e.message}")
+        if (data.isNotEmpty()) {
+            googleMap.animateCamera(CameraUpdateFactory.newLatLngBounds(boundsBuilder.build(), 120))
         }
     }
 
@@ -156,6 +191,27 @@ class PlantLocationMapFragment : Fragment(), OnMapReadyCallback {
         }
     }
 
+    private fun showDateRangePicker() {
+        val datePicker = MaterialDatePicker.Builder.dateRangePicker()
+            .setTitleText("Select a Date Range")
+            .build()
 
+        datePicker.addOnPositiveButtonClickListener { dateSelection ->
+            val startDateLong = dateSelection.first
+            val endDateLong = dateSelection.second
+
+            val startDateAsUtilDate = UtilDate(startDateLong)
+            val endDateAsUtilDate = UtilDate(endDateLong)
+
+            val sdf = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+            binding.dateFilterButton.text = "Date: ${sdf.format(startDateAsUtilDate)} - ${sdf.format(endDateAsUtilDate)}"
+
+            // ✅ Make the reset button visible now that a filter is active
+            binding.dateFilterResetButton.visibility = View.VISIBLE
+
+            viewModel.setDateRangeFilter(startDateAsUtilDate, endDateAsUtilDate)
+        }
+
+        datePicker.show(childFragmentManager, "DATE_PICKER")
+    }
 }
-    

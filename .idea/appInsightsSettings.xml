@@ -10,7 +10,7 @@
               <option name="connection">
                 <ConnectionSetting>
                   <option name="appId" value="com.example.myPlant" />
-                  <option name="mobileSdkAppId" value="1:716243749121:android:a9463fc5492ffc24e2b300" />
+                  <option name="mobileSdkAppId" value="1:716243749121:android:49eff067ca54dc8de2b300" />
                   <option name="projectId" value="cos30049-group-wee" />
                   <option name="projectNumber" value="716243749121" />
                 </ConnectionSetting>
