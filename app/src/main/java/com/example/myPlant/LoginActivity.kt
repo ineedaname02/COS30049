@@ -2,6 +2,7 @@ package com.example.myPlant
 
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import android.view.View
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
@@ -40,9 +41,11 @@ class LoginActivity : AppCompatActivity() {
     private lateinit var loginButton: Button
     private lateinit var registerButton: Button
     private lateinit var progressBar: ProgressBar
+    private lateinit var forgotPasswordTextView: TextView
 
     companion object {
         var pendingResolver: MultiFactorResolver? = null
+        private const val TAG = "LoginActivity"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -80,6 +83,7 @@ class LoginActivity : AppCompatActivity() {
         loginButton = findViewById(R.id.loginButton)
         registerButton = findViewById(R.id.registerButton)
         progressBar = findViewById(R.id.progressBar)
+        forgotPasswordTextView = findViewById(R.id.forgotPasswordTextView)
 
         // Check if user is already logged in using repository
         if (authRepository.isUserLoggedIn) {
@@ -108,6 +112,10 @@ class LoginActivity : AppCompatActivity() {
 
         registerButton.setOnClickListener {
             registerUser()
+        }
+
+        forgotPasswordTextView.setOnClickListener {
+            showForgotPasswordDialog()
         }
     }
 
@@ -154,6 +162,38 @@ class LoginActivity : AppCompatActivity() {
         }
     }
 
+    private fun showForgotPasswordDialog() {
+        val builder = AlertDialog.Builder(this)
+        builder.setTitle("Forgot Password")
+        val view = layoutInflater.inflate(R.layout.dialog_forgot_password, null)
+        val emailEditText = view.findViewById<EditText>(R.id.emailEditText)
+        builder.setView(view)
+        builder.setPositiveButton("Reset") { _, _ ->
+            val email = emailEditText.text.toString().trim()
+            if (email.isNotEmpty()) {
+                sendPasswordResetEmail(email)
+            } else {
+                Toast.makeText(this, "Please enter your email", Toast.LENGTH_SHORT).show()
+            }
+        }
+        builder.setNegativeButton("Cancel", null)
+        builder.create().show()
+    }
+
+    private fun sendPasswordResetEmail(email: String) {
+        showLoading(true)
+        lifecycleScope.launch {
+            val result = authRepository.resetPassword(email)
+            if (result.isSuccess) {
+                Log.d(TAG, "Password reset email sent successfully to $email")
+                Toast.makeText(this@LoginActivity, "Password reset email sent", Toast.LENGTH_SHORT).show()
+            } else {
+                Log.e(TAG, "Failed to send password reset email to $email", result.exceptionOrNull())
+                Toast.makeText(this@LoginActivity, "Failed to send reset email: ${result.exceptionOrNull()?.message}", Toast.LENGTH_SHORT).show()
+            }
+            showLoading(false)
+        }
+    }
 
 
     private fun registerUser() {

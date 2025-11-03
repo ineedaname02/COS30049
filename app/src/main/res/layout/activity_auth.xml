@@ -132,6 +132,16 @@
                         android:textColorHint="@color/text_hint" />
 
                 </com.google.android.material.textfield.TextInputLayout>
+                
+                <TextView
+                    android:id="@+id/forgotPasswordTextView"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="end"
+                    android:layout_marginBottom="16dp"
+                    android:text="Forgot Password?"
+                    android:textColor="@color/primary_green"
+                    android:textSize="14sp" />
 
                 <!-- Progress Bar -->
                 <ProgressBar
