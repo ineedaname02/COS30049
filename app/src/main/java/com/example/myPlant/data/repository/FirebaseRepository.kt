@@ -585,7 +585,7 @@ class FirebaseRepository(private val context: Context) {
                 val category = observation.iucnCategory?.lowercase()
                 if (category in endangeredCategories) {
                     // ensure this function exists and accepts Observation
-                    saveEndangeredDataToFirestore(observation, source = "admin_verified")
+                    saveEndangeredDataToFirestore(observation, source = "admin_verified", adminId = adminId)
                     Log.d("AdminValidation", "Skipped trainingData: ${observation.currentIdentification?.scientificName} is endangered")
                 } else {
                     addToTrainingDataFromAdmin(
@@ -644,7 +644,7 @@ class FirebaseRepository(private val context: Context) {
         )
         val category = observation.iucnCategory?.lowercase()
         if (category in endangeredCategories) {
-            saveEndangeredDataToFirestore(observation, source = "admin_verified")
+            saveEndangeredDataToFirestore(observation, source = "admin_verified", adminId = adminId)
             Log.d("TrainingData", "⚠️ Skipped trainingData: ${observation.currentIdentification?.scientificName} is endangered")
             return
         }
@@ -713,21 +713,6 @@ class FirebaseRepository(private val context: Context) {
         }
     }
 
-    // ---------- NEW HELPER: save endangered metadata to EndangeredData collection ----------
-    private suspend fun saveEndangeredDataToFirestore(endangeredData: Map<String, Any>) {
-        try {
-            val docId = (endangeredData["observationId"] ?: UUID.randomUUID().toString()).toString()
-            db.collection("EndangeredData")
-                .document(docId)
-                .set(endangeredData, SetOptions.merge())
-                .await()
-
-            Log.d("EndangeredData", "✅ Saved endangered metadata for ${docId}")
-        } catch (e: Exception) {
-            Log.e("EndangeredData", "❌ Failed to save endangered data to Firestore: ${e.message}", e)
-        }
-    }
-
     // ---------- NEW HELPER: central handler for admin-created training/endangered data ----------
     private suspend fun handleAdminTrainingData(
         observation: Observation,
@@ -785,7 +770,7 @@ class FirebaseRepository(private val context: Context) {
                     )
                 }
 
-                saveEndangeredDataToFirestore(endangeredMap)
+                saveEndangeredDataToFirestore(observation, source = "admin_verified", adminId = adminId)
                 return
             }
 
@@ -828,6 +813,12 @@ class FirebaseRepository(private val context: Context) {
 
     private suspend fun saveTrainingDataToFirestore(trainingData: TrainingData) {
         try {
+            // ✅ enforce: skip training data without geolocation
+            if (trainingData.geolocation == null) {
+                Log.w("TrainingData", "Skipped saving trainingData for ${trainingData.trainingId} - missing geolocation")
+                return
+            }
+
             trainingDataCollection.document(trainingData.trainingId)
                 .set(trainingData, SetOptions.merge())
                 .await()
@@ -837,8 +828,15 @@ class FirebaseRepository(private val context: Context) {
         }
     }
 
+
     // ✅ Central helper to save endangered plant data
-    private suspend fun saveEndangeredDataToFirestore(observation: Observation, source: String) {
+    // ✅ Central helper to save endangered plant data
+// Now accepts an optional adminId for admin-sourced entries.
+    private suspend fun saveEndangeredDataToFirestore(
+        observation: Observation,
+        source: String,
+        adminId: String? = null
+    ) {
         try {
             val endangeredCategories = listOf(
                 "extinct",
@@ -850,6 +848,7 @@ class FirebaseRepository(private val context: Context) {
             val category = observation.iucnCategory?.lowercase()
             if (category !in endangeredCategories) return // not endangered
 
+            // Use a stable doc id per observation to avoid duplicates
             val docId = "endangered_${observation.observationId}"
             val data = mutableMapOf<String, Any>(
                 "observationId" to observation.observationId,
@@ -861,12 +860,18 @@ class FirebaseRepository(private val context: Context) {
                 "source" to source
             )
 
+            // attach adminId if provided
+            adminId?.let { data["addedBy"] = it }
+
+            // add geo if present
             observation.geolocation?.let {
                 data["geolocation"] = mapOf("lat" to it.lat, "lng" to it.lng)
             }
 
-            val imageUrl = observation.plantImageUrls.firstOrNull()
-            if (imageUrl != null) data["imageUrl"] = imageUrl
+            // add image if present
+            observation.plantImageUrls.firstOrNull()?.let {
+                data["imageUrl"] = it
+            }
 
             db.collection("EndangeredData").document(docId)
                 .set(data, SetOptions.merge())
@@ -879,8 +884,8 @@ class FirebaseRepository(private val context: Context) {
         }
 
         Log.i("EndangeredRedirect", "🌱 Redirected ${observation.currentIdentification?.scientificName} → EndangeredData")
-
     }
+
 
     /**
      * Fetches all documents from the `trainingData` collection for map display.
