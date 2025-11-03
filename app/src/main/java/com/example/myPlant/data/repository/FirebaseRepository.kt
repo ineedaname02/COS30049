@@ -215,10 +215,8 @@ class FirebaseRepository(private val context: Context) {
         observation: Observation,
         topSuggestion: AISuggestion
     ) {
-        val scientificName = topSuggestion.scientificName
-            .replace("[^A-Za-z0-9 ]".toRegex(), "_")
-            .trim()
-            .lowercase()
+        val scientificName = sanitizePlantName(topSuggestion.scientificName)
+
 
         val originalImageUrl = observation.plantImageUrls.firstOrNull()
 
@@ -620,6 +618,8 @@ class FirebaseRepository(private val context: Context) {
                 )
                 .await()
 
+            db.collection("flagQueue").document(flagDocId).delete().await()
+
             Log.d("AdminValidation", "Admin validation completed for $observationId (user: $userId)")
             true
         } catch (e: Exception) {
@@ -701,7 +701,7 @@ class FirebaseRepository(private val context: Context) {
         return try {
             val sourceRef = FirebaseStorage.getInstance().getReferenceFromUrl(originalImageUrl)
             val newFileName = "${UUID.randomUUID()}.jpg"
-            val folderName = scientificName.replace("[^A-Za-z0-9_]".toRegex(), "_").lowercase()
+            val folderName = sanitizePlantName(scientificName)
             val destRef = storage.reference.child("trainingData/$folderName/$newFileName")
 
             val bytes = sourceRef.getBytes(5 * 1024 * 1024).await() // up to 5MB
@@ -896,6 +896,10 @@ class FirebaseRepository(private val context: Context) {
             Log.e("FirebaseRepo-Map", "Error fetching training data for map", e)
             emptyList() // Return an empty list on error
         }
+    }
+
+    private fun sanitizePlantName(name: String): String {
+        return name.trim().lowercase().replace("[^a-z0-9]".toRegex(), "_")
     }
 
 }
