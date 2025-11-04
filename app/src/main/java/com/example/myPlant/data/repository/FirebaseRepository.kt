@@ -682,7 +682,9 @@ class FirebaseRepository(private val context: Context) {
                 verificationMethod = "manual",
                 confidenceScore = observation.currentIdentification?.confidence ?: 1.0,
                 geolocation = observation.geolocation,
-                isActive = true
+                isActive = true,
+                sourceApi = "admin_verified",
+                iucnCategory = observation.iucnCategory ?: ""
             )
 
             trainingDataCollection.document(trainingData.trainingId)
@@ -759,7 +761,7 @@ class FirebaseRepository(private val context: Context) {
                     "iucnCategory" to (observation.iucnCategory ?: ""),
                     "addedAt" to Timestamp.now(),
                     "status" to "flagged_endangered",
-                    "source" to "admin_verified"
+                    "sourceApi" to  "admin_verified"
                 )
 
                 if (!newImageUrl.isNullOrEmpty()) endangeredMap["imageUrl"] = newImageUrl
@@ -799,7 +801,8 @@ class FirebaseRepository(private val context: Context) {
                 confidenceScore = observation.currentIdentification?.confidence ?: 1.0,
                 geolocation = observation.geolocation,
                 isActive = true,
-                sourceApi = "admin_verified"
+                sourceApi = "admin_verified",
+                iucnCategory = observation.iucnCategory ?: ""
             )
 
             // Optionally set isEndangered flag if you added that field
