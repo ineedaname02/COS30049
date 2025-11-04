@@ -16,7 +16,7 @@
         android:layout_height="24dp"
         android:layout_gravity="top|end"
         android:src="@android:drawable/ic_delete"
-        android:background="?attr/selectableItemBackgroundBorderless"
+        android:background="@drawable/remove_button_background"
         android:layout_margin="8dp"/>
 
 </FrameLayout>

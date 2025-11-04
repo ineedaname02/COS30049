@@ -49,7 +49,8 @@
         </activity>
         <activity
             android:name=".ui.IotDashboardActivity"
-            android:exported="false" />
+            android:exported="false"
+            android:theme="@style/Theme.COS30049.NoActionBar" />
         <activity
             android:name=".ui.HistoryActivity"
             android:exported="false" />

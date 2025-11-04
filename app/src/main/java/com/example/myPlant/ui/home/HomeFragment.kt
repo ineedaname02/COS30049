@@ -93,27 +93,33 @@ class HomeFragment : Fragment() {
     private val pickImageLauncher = registerForActivityResult(
         ActivityResultContracts.GetMultipleContents()
     ) { uris: List<Uri> ->
-        if (uris.isNotEmpty()) {
-            if (!isUserAuthenticated()) {
-                Toast.makeText(requireContext(), "Please log in to upload images", Toast.LENGTH_LONG).show()
-                return@registerForActivityResult
-            }
+        if (uris.isEmpty()) return@registerForActivityResult
 
-            selectedImageUris.clear()
-            selectedImageUris.addAll(uris.take(5))
-
-            adapter = SelectedImagesAdapter(selectedImageUris) { uri ->
-                removeImage(uri)
-            }
-            binding.imageRecyclerView.adapter = adapter
-            binding.imageRecyclerView.layoutManager =
-                LinearLayoutManager(requireContext(), LinearLayoutManager.HORIZONTAL, false)
-
-            // Make preview visible when images are selected
-            binding.imageRecyclerView.visibility = View.VISIBLE
-
-            binding.textHome.text = "Selected ${selectedImageUris.size} image(s)"
+        if (!isUserAuthenticated()) {
+            Toast.makeText(requireContext(), "Please log in to upload images", Toast.LENGTH_LONG).show()
+            return@registerForActivityResult
         }
+
+        // Add new images to the existing list
+        selectedImageUris.addAll(uris)
+
+        // If we've exceeded the limit, trim the list to the 5 most recent images
+        if (selectedImageUris.size > 5) {
+            val toRemove = selectedImageUris.size - 5
+            selectedImageUris.subList(0, toRemove).clear() // remove oldest
+            Toast.makeText(requireContext(), "Maximum of 5 images. Oldest images have been replaced.", Toast.LENGTH_LONG).show()
+        }
+
+        // The adapter is re-created to reflect the changes, consistent with existing code
+        adapter = SelectedImagesAdapter(selectedImageUris) { uri ->
+            removeImage(uri)
+        }
+        binding.imageRecyclerView.adapter = adapter
+        binding.imageRecyclerView.layoutManager =
+            LinearLayoutManager(requireContext(), LinearLayoutManager.HORIZONTAL, false)
+
+        binding.imageRecyclerView.visibility = View.VISIBLE
+        binding.textHome.text = "Selected ${selectedImageUris.size} image(s)"
     }
 
     private var cameraImageUri: Uri? = null

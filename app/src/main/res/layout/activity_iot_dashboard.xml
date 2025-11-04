@@ -5,70 +5,80 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:background="@color/background_light"
-    android:padding="40dp">
+    android:fitsSystemWindows="true">
 
-    <TextView
-        android:id="@+id/tvDashboardTitle"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="IoT Dashboard"
-        android:textSize="24sp"
-        android:textColor="@color/text_primary"
-        android:textStyle="bold"
-        android:layout_gravity="center"
-        android:paddingBottom="16dp" />
-
-    <androidx.cardview.widget.CardView
+    <com.google.android.material.appbar.AppBarLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="20dp"
-        app:cardBackgroundColor="@color/surface_light"
-        app:cardCornerRadius="16dp"
-        app:cardElevation="6dp"
-        app:cardUseCompatPadding="true">
+        android:layout_height="wrap_content">
 
-        <LinearLayout
+        <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/toolbar"
+            style="@style/Widget.MaterialComponents.Toolbar.Primary"
+            android:layout_width="match_parent"
+            android:layout_height="?attr/actionBarSize"
+            app:title="IoT Dashboard"
+            app:titleTextColor="@android:color/white"
+            android:theme="@style/ThemeOverlay.MaterialComponents.Dark.ActionBar"/>
+
+    </com.google.android.material.appbar.AppBarLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:padding="40dp">
+
+        <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="16dp">
+            android:layout_marginBottom="20dp"
+            app:cardBackgroundColor="@color/surface_light"
+            app:cardCornerRadius="16dp"
+            app:cardElevation="6dp"
+            app:cardUseCompatPadding="true">
 
-            <TextView
-                android:id="@+id/tvPlantStatus"
-                android:layout_width="wrap_content"
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Current Plant Status"
-                android:textColor="@color/text_primary"
-                android:textSize="18sp"
-                android:textStyle="bold" />
+                android:orientation="vertical"
+                android:padding="16dp">
 
-            <TextView
-                android:id="@+id/tvSensorReading"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:text="Moisture: 45% | Temp: 26°C"
-                android:textColor="@color/text_secondary"
-                android:textSize="16sp" />
+                <TextView
+                    android:id="@+id/tvPlantStatus"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Current Plant Status"
+                    android:textColor="@color/text_primary"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
 
-        </LinearLayout>
-    </androidx.cardview.widget.CardView>
+                <TextView
+                    android:id="@+id/tvSensorReading"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="Moisture: 45% | Temp: 26°C"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="16sp" />
 
-    <Button
-        android:id="@+id/btnViewHistory"
-        android:layout_width="match_parent"
-        android:layout_height="50dp"
-        android:text="View History"
-        android:textColor="@color/text_white"
-        android:backgroundTint="@color/primary_green"
-        android:layout_marginBottom="12dp" />
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
 
-    <Button
-        android:id="@+id/btnRefreshData"
-        android:layout_width="match_parent"
-        android:layout_height="50dp"
-        android:text="Refresh Data"
-        android:textColor="@color/text_white"
-        android:backgroundTint="@color/accent_blue" />
+        <Button
+            android:id="@+id/btnViewHistory"
+            android:layout_width="match_parent"
+            android:layout_height="50dp"
+            android:text="View History"
+            android:textColor="@color/text_white"
+            android:backgroundTint="@color/primary_green"
+            android:layout_marginBottom="12dp" />
 
+        <Button
+            android:id="@+id/btnRefreshData"
+            android:layout_width="match_parent"
+            android:layout_height="50dp"
+            android:text="Refresh Data"
+            android:textColor="@color/text_white"
+            android:backgroundTint="@color/accent_blue" />
+    </LinearLayout>
 </LinearLayout>

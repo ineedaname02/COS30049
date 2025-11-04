@@ -131,12 +131,20 @@ class MainActivity : AppCompatActivity() {
         }
 
         val firestore = FirebaseFirestore.getInstance()
+        val navView: NavigationView = binding.navView
 
-// Use the already-declared currentUser from above
+        // Use the already-declared currentUser from above
         if (currentUser != null) {
-            firestore.collection("users").document(currentUser.uid).get()
+            firestore.collection("userProfiles").document(currentUser.uid).get()
                 .addOnSuccessListener { document ->
                     val role = document.getString("role")
+                    userPrefs.userRole = role // Save the role
+
+                    // Update admin menu visibility
+                    val navMenu = navView.menu
+                    val isAdmin = role == "admin"
+                    navMenu.setGroupVisible(R.id.admin_group, isAdmin)
+
                     if (role == "admin") {
                         FirebaseMessaging.getInstance().subscribeToTopic("admins")
                             .addOnCompleteListener { task ->
@@ -171,7 +179,6 @@ class MainActivity : AppCompatActivity() {
         }
 
         val drawerLayout: DrawerLayout = binding.drawerLayout
-        val navView: NavigationView = binding.navView
         val navController = findNavController(R.id.nav_host_fragment_content_main)
 
         // ---------------------------
