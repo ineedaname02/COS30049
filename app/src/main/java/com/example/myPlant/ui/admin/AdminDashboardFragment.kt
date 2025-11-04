@@ -35,7 +35,11 @@ class AdminDashboardFragment : Fragment() {
         aiHelperButton.setOnClickListener {
             // Example: Navigate to AI Helper Fragment
             findNavController().navigate(R.id.nav_ai_helper)
+        }
 
+        val viewUsersButton = view.findViewById<Button>(R.id.viewUsersButton)
+        viewUsersButton.setOnClickListener {
+            findNavController().navigate(R.id.nav_admin_user_list)
         }
 
         return view
