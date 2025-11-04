@@ -46,6 +46,7 @@
         android:name="com.example.myPlant.ui.plantlocationmap.PlantLocationMapFragment"
         android:label="Verified Plant Map"
         tools:layout="@layout/fragment_training_data_map" />
+
     <fragment
         android:id="@+id/nav_ai_helper"
         android:name="com.example.myPlant.ui.admin.AiHelperFragment"

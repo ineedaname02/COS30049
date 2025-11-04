@@ -2,10 +2,13 @@ package com.example.myPlant
 
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
+import android.util.Log
 import android.view.Menu
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import com.google.android.material.snackbar.Snackbar
 import com.google.android.material.navigation.NavigationView
 import androidx.navigation.findNavController
@@ -17,6 +20,7 @@ import androidx.drawerlayout.widget.DrawerLayout
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.content.ContextCompat
 import androidx.core.view.GravityCompat
 import androidx.navigation.ui.NavigationUI
 import com.example.myPlant.databinding.ActivityMainBinding
@@ -28,6 +32,7 @@ import com.example.myPlant.data.repository.Graph
 import com.example.myPlant.ui.auth.EnableMfaActivity
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.messaging.FirebaseMessaging
+import android.Manifest
 
 class MainActivity : AppCompatActivity() {
 
@@ -91,6 +96,27 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private val requestPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+            if (isGranted) {
+                Log.d("MainActivity", "✅ Notification permission granted")
+            } else {
+                Log.w("MainActivity", "⚠️ Notification permission denied")
+            }
+        }
+
+    private fun askNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+    }
+
     // ---------------------------
     // MAIN ACTIVITY SETUP
     // ---------------------------
@@ -131,40 +157,36 @@ class MainActivity : AppCompatActivity() {
         }
 
         val firestore = FirebaseFirestore.getInstance()
-        val navView: NavigationView = binding.navView
 
-        // Use the already-declared currentUser from above
+        askNotificationPermission()
+
+// Use the already-declared currentUser from above
         if (currentUser != null) {
             firestore.collection("userProfiles").document(currentUser.uid).get()
                 .addOnSuccessListener { document ->
                     val role = document.getString("role")
-                    userPrefs.userRole = role // Save the role
-
-                    // Update admin menu visibility
-                    val navMenu = navView.menu
-                    val isAdmin = role == "admin"
-                    navMenu.setGroupVisible(R.id.admin_group, isAdmin)
-
                     if (role == "admin") {
                         FirebaseMessaging.getInstance().subscribeToTopic("admins")
                             .addOnCompleteListener { task ->
                                 if (task.isSuccessful) {
-                                    println("✅ Admin subscribed to 'admins' topic")
+                                    Log.d("MainActivity", " Admin subscribed to 'admins' topic")
                                 } else {
-                                    println("❌ Failed to subscribe: ${task.exception?.message}")
+                                    Log.e("MainActivity", " Failed to subscribe: ${task.exception?.message}")
                                 }
                             }
                     } else {
                         FirebaseMessaging.getInstance().unsubscribeFromTopic("admins")
                             .addOnCompleteListener {
-                                println("🚫 Unsubscribed non-admin user from 'admins'")
+                                Log.d("MainActivity", " Unsubscribed non-admin user from 'admins'")
                             }
                     }
                 }
                 .addOnFailureListener { e ->
-                    println("❌ Failed to get role: ${e.message}")
+
+                    Log.e("MainActivity", " Failed to get role: ${e.message}")
                 }
         }
+
 
 
 
@@ -179,6 +201,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         val drawerLayout: DrawerLayout = binding.drawerLayout
+        val navView: NavigationView = binding.navView
         val navController = findNavController(R.id.nav_host_fragment_content_main)
 
         // ---------------------------

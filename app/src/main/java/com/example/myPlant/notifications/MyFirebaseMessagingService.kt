@@ -15,11 +15,16 @@ import com.example.myPlant.R
 class MyFirebaseMessagingService : FirebaseMessagingService() {
 
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
-        // Check if the message contains a notification payload
-        remoteMessage.notification?.let {
-            showNotification(it.title ?: "New Event", it.body ?: "")
-        }
+        val title = remoteMessage.notification?.title ?: "New Event"
+        val message = remoteMessage.notification?.body ?: ""
+
+        // Optional: read extra fields
+        val eventId = remoteMessage.data["eventId"]
+        val deviceId = remoteMessage.data["deviceId"]
+
+        showNotification(title, message)
     }
+
 
     private fun showNotification(title: String, message: String) {
         val channelId = "event_channel"

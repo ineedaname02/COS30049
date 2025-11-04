@@ -74,40 +74,11 @@
                     android:text="All" />
 
                 <com.google.android.material.chip.Chip
-                    android:id="@+id/chip_critically_endangered"
-                    style="@style/Widget.MaterialComponents.Chip.Filter"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Critically Endangered" />
-
-                <com.google.android.material.chip.Chip
-                    android:id="@+id/chip_endangered"
-                    style="@style/Widget.MaterialComponents.Chip.Filter"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Endangered" />
-
-                <com.google.android.material.chip.Chip
                     android:id="@+id/chip_vulnerable"
                     style="@style/Widget.MaterialComponents.Chip.Filter"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="Vulnerable" />
-
-                <!-- ✅ ADDING NEW CHIPS -->
-                <com.google.android.material.chip.Chip
-                    android:id="@+id/chip_extinct_in_wild"
-                    style="@style/Widget.MaterialComponents.Chip.Filter"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Extinct in the Wild" />
-
-                <com.google.android.material.chip.Chip
-                    android:id="@+id/chip_extinct"
-                    style="@style/Widget.MaterialComponents.Chip.Filter"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Extinct" />
 
                 <com.google.android.material.chip.Chip
                     android:id="@+id/chip_near_threatened"
