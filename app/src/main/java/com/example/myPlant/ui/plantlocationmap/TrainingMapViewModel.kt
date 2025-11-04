@@ -41,15 +41,38 @@ class TrainingMapViewModel : ViewModel() {
         viewModelScope.launch {
             _isLoading.value = true
             try {
-                // This calls the existing getTrainingDataForMap function in your repository
                 val data = firebaseRepository.getTrainingDataForMap()
-                allTrainingData = data // Store the full list
-                // Apply any existing filters right after fetching
+                allTrainingData = data
+
+                // Detailed debugging
+                Log.d("TrainingMapViewModel", "=== TRAINING DATA DEBUG ===")
+                Log.d("TrainingMapViewModel", "Total items fetched: ${data.size}")
+
+                // Check items with geolocation
+                val itemsWithGeo = data.filter { it.geolocation != null }
+                Log.d("TrainingMapViewModel", "Items with geolocation: ${itemsWithGeo.size}")
+
+                // Check items with IUCN categories
+                val itemsWithIucn = data.filter { !it.iucnCategory.isNullOrEmpty() }
+                Log.d("TrainingMapViewModel", "Items with IUCN category: ${itemsWithIucn.size}")
+
+                // Log specific IUCN categories found
+                val uniqueIucnCategories = itemsWithIucn.mapNotNull { it.iucnCategory }.distinct()
+                Log.d("TrainingMapViewModel", "Unique IUCN categories: $uniqueIucnCategories")
+
+                // Log a few sample items for inspection
+                data.take(3).forEachIndexed { index, item ->
+                    Log.d("TrainingMapViewModel", "Sample $index: plantId=${item.plantId}, " +
+                            "geo=${item.geolocation != null}, " +
+                            "iucn=${item.iucnCategory ?: "null"}")
+                }
+
                 applyFilters()
-                Log.d("TrainingMapViewModel", "Fetched ${data.size} items for training map.")
+                Log.d("TrainingMapViewModel", "Final filtered count: ${_filteredTrainingDataForMap.value?.size ?: 0}")
+
             } catch (e: Exception) {
                 Log.e("TrainingMapViewModel", "Error loading training data for map", e)
-                _filteredTrainingDataForMap.value = emptyList() // Ensure UI is cleared on error
+                _filteredTrainingDataForMap.value = emptyList()
             } finally {
                 _isLoading.value = false
             }
@@ -89,21 +112,30 @@ class TrainingMapViewModel : ViewModel() {
         // 1. Apply rarity filter
         _rarityFilter.value?.let { rarity ->
             if (rarity != "All") {
-                filteredList = filteredList.filter { it.iucnCategory.equals(rarity, ignoreCase = true) }
+                filteredList = filteredList.filter { trainingData ->
+                    // Handle both null and empty IUCN categories
+                    val iucn = trainingData.iucnCategory?.trim()?.lowercase()
+                    when (rarity.lowercase()) {
+                        "vulnerable" -> iucn == "vulnerable"
+                        "near threatened" -> iucn == "near threatened" || iucn == "near_threatened"
+                        "least concern" -> iucn == "least concern" || iucn == "least_concern"
+                        "data deficient" -> iucn == "data deficient" || iucn == "data_deficient"
+                        "not evaluated" -> iucn == "not evaluated" || iucn == "not_evaluated"
+                        else -> iucn == rarity.trim().lowercase()
+                    }
+                }
             }
         }
 
-        // 2. Apply date range filter
+        // 2. Apply date range filter (your existing code is fine)
         _dateRangeFilter.value?.let { dateRange ->
             val (start, end) = dateRange
-            // Add a day to the end date to make the range inclusive
             val inclusiveEndDate = Calendar.getInstance().apply {
                 time = end
                 add(Calendar.DAY_OF_YEAR, 1)
             }.time
 
             filteredList = filteredList.filter {
-                // It is safer to use java.util.Date for comparison
                 val verificationDate = it.verificationDate?.toDate()
                 verificationDate != null &&
                         !verificationDate.before(start) &&

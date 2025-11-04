@@ -60,11 +60,7 @@ class PlantLocationMapFragment : Fragment(), OnMapReadyCallback {
         // These lines will now work correctly
         binding.rarityFilterChips.setOnCheckedChangeListener { group, checkedId ->
             val newFilter = when (checkedId) {
-                R.id.chip_critically_endangered -> "Critically Endangered"
-                R.id.chip_endangered -> "Endangered"
                 R.id.chip_vulnerable -> "Vulnerable"
-                R.id.chip_extinct -> "Extinct"
-                R.id.chip_extinct_in_wild -> "Extinct in the Wild"
                 R.id.chip_near_threatened -> "Near Threatened"
                 R.id.chip_least_concern -> "Least Concern"
                 R.id.chip_data_deficient -> "Data Deficient"

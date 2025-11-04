@@ -892,14 +892,30 @@ class FirebaseRepository(private val context: Context) {
      */
     suspend fun getTrainingDataForMap(): List<TrainingData> {
         return try {
+            Log.d("FirebaseRepo-Map", "Fetching training data for map...")
             val snapshot = trainingDataCollection
                 .whereNotEqualTo("geolocation", null) // Only get items with a location
                 .get()
                 .await()
-            snapshot.toObjects(TrainingData::class.java)
+
+            val data = snapshot.toObjects(TrainingData::class.java)
+            Log.d("FirebaseRepo-Map", "Successfully fetched ${data.size} training data items with geolocation")
+
+            // Debug: Check what fields are actually present
+            if (data.isNotEmpty()) {
+                val firstItem = data.first()
+                Log.d("FirebaseRepo-Map", "First item fields - " +
+                        "trainingId: ${firstItem.trainingId}, " +
+                        "plantId: ${firstItem.plantId}, " +
+                        "geolocation: ${firstItem.geolocation}, " +
+                        "iucnCategory: ${firstItem.iucnCategory}, " +
+                        "hasImage: ${firstItem.imageUrl.isNotEmpty()}")
+            }
+
+            data
         } catch (e: Exception) {
             Log.e("FirebaseRepo-Map", "Error fetching training data for map", e)
-            emptyList() // Return an empty list on error
+            emptyList()
         }
     }
 
