@@ -130,29 +130,61 @@ class LoginActivity : AppCompatActivity() {
 
                 if (user != null && user.multiFactor.enrolledFactors.isEmpty()) {
                     // MFA not enabled — block access and force setup
-                    Toast.makeText(this@LoginActivity, "You must enable MFA before logging in.", Toast.LENGTH_LONG).show()
+                    Toast.makeText(
+                        this@LoginActivity,
+                        "You must enable MFA before logging in.",
+                        Toast.LENGTH_LONG
+                    ).show()
 
-                    val intent = Intent(this@LoginActivity, com.example.myPlant.ui.auth.EnableMfaActivity::class.java)
+                    val intent = Intent(
+                        this@LoginActivity,
+                        com.example.myPlant.ui.auth.EnableMfaActivity::class.java
+                    )
                     startActivity(intent)
                     finish()
-                } else {
-                    // MFA already enabled — proceed normally
-                    navigateToMainActivity()
+                } else if (user != null) {
+                    // MFA enabled — fetch role and save in UserPreferences
+                    try {
+                        val profileResult = authRepository.getUserProfile(user.uid)
+                        profileResult.onSuccess { profile ->
+                            val userPrefs = UserPreferences(this@LoginActivity)
+                            userPrefs.userRole = profile.role // Save role for this session
+                            navigateToMainActivity()
+                        }.onFailure { e ->
+                            Toast.makeText(
+                                this@LoginActivity,
+                                "Failed to get user role: ${e.message}",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                            showLoading(false)
+                        }
+                    } catch (e: Exception) {
+                        Toast.makeText(
+                            this@LoginActivity,
+                            "Error fetching user role: ${e.message}",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                        showLoading(false)
+                    }
                 }
 
             } else {
                 val ex = loginResult.exceptionOrNull()
                 if (ex is AuthRepository.MultiFactorAuthRequired) {
                     // Handle existing MFA challenge (SMS verification)
-                    // Example:
                     handleMultiFactorChallenge(ex.resolver)
                 } else {
-                    Toast.makeText(this@LoginActivity, "Login failed: ${ex?.message}", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(
+                        this@LoginActivity,
+                        "Login failed: ${ex?.message}",
+                        Toast.LENGTH_SHORT
+                    ).show()
                 }
             }
             showLoading(false)
         }
     }
+
 
 
 

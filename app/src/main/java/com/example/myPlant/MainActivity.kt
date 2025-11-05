@@ -226,6 +226,9 @@ class MainActivity : AppCompatActivity() {
 
             // ✅ HANDLE LOGOUT HERE
             if (destination.id == R.id.nav_logout) {
+                // Clear stored user role
+                val userPrefs = UserPreferences(this)
+                userPrefs.userRole = null // optionally use userPrefs.clear() if you want to reset everything
                 FirebaseAuth.getInstance().signOut()
                 startActivity(Intent(this, LoginActivity::class.java))
                 finish()
@@ -289,12 +292,25 @@ class MainActivity : AppCompatActivity() {
         }
 
         // ---------------------------
-        // ADMIN MENU VISIBILITY
+        // ADMIN DASHBOARD VISIBILITY
         // ---------------------------
         val navMenu = navView.menu
-        val role = userPrefs.userRole
-        val isAdmin = role == "admin"
-        navMenu.setGroupVisible(R.id.admin_group, isAdmin)
+
+        if (currentUser != null) {
+            firestore.collection("userProfiles").document(currentUser.uid).get()
+                .addOnSuccessListener { document ->
+                    val role = document.getString("role") ?: "public" // default to public if missing
+                    // Save locally for session
+                    userPrefs.userRole = role
+                    navMenu.setGroupVisible(R.id.admin_group, role == "admin")
+                }
+                .addOnFailureListener { e ->
+                    Log.e("MainActivity", "Failed to fetch role: ${e.message}")
+                    navMenu.setGroupVisible(R.id.admin_group, false)
+                }
+        } else {
+            navMenu.setGroupVisible(R.id.admin_group, false)
+        }
     }
 
     // ---------------------------
