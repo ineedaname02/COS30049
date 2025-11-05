@@ -54,6 +54,7 @@ class AuthRepository {
             // 3. Create user profile in Firestore using your data models
             val userProfile = UserProfile(
                 uid = user.uid,
+                email = user.email,
                 role = "public",
                 dateJoined = Timestamp.now(),
                 lastProfileUpdate = Timestamp.now(),

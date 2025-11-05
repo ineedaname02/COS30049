@@ -7,6 +7,7 @@ import com.example.myPlant.data.model.PrivacyPreferences
 data class UserProfile(
     // Only store additional data NOT provided by Firebase Auth
     val uid: String = "",
+    val email: String? = null,
     val phoneNumber: String? = null, // <-- Added for MFA
     val bio: String? = null,
     val location: String? = null,

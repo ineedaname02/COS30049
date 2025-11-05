@@ -1,31 +1,40 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
-    android:orientation="horizontal"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:padding="12dp"
+    android:orientation="vertical"
     android:background="@drawable/bg_user_card"
-    android:gravity="center_vertical"
+    android:padding="12dp"
     android:layout_marginBottom="8dp">
 
+    <!-- User email -->
     <TextView
         android:id="@+id/textUserEmail"
-        android:layout_width="0dp"
-        android:layout_weight="1"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="user@example.com"
+        android:textStyle="bold"
         android:textSize="16sp"
-        android:ellipsize="end"
-        android:singleLine="true"/>
+        android:textColor="@android:color/black" />
 
+    <!-- Current role display -->
     <TextView
         android:id="@+id/textUserRole"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Role: public"
+        android:textSize="14sp"
+        android:paddingTop="4dp"
+        android:textColor="@android:color/darker_gray" />
+
+    <!-- Hidden role dropdown for admin editing -->
+    <Spinner
+        android:id="@+id/spinnerUserRole"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="admin"
-        android:textStyle="bold"
-        android:textSize="14sp"
-        android:paddingStart="8dp"/>
+        android:visibility="gone"
+        android:layout_marginTop="6dp"
+        android:entries="@array/roles_array" />
 
 </LinearLayout>
