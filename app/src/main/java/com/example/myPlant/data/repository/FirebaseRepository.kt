@@ -344,19 +344,43 @@ class FirebaseRepository(private val context: Context) {
             )
         ).await()
 
-        // Handle training or endangered data
+        // Handle endangered species first
         val endangeredCategories = listOf(
             "extinct",
             "extinct in the wild",
             "critically endangered",
             "endangered"
         )
-
         val category = observation.iucnCategory?.lowercase()
         if (category in endangeredCategories) {
             saveEndangeredDataToFirestore(observation, source = "user_verified")
             Log.d("TrainingData", "⚠️ Skipped trainingData: $scientificName is endangered")
+            return "Observation $observationId confirmed and redirected to EndangeredData"
+        }
+
+        // Determine AI confidence (fallback to 1.0 if not found)
+        val confidence = observation.currentIdentification?.confidence ?: 1.0
+
+        if (confidence < 0.5) {
+            // 🔸 Low confidence → add to flagQueue for admin verification
+            val flagData = mapOf(
+                "observationId" to observationId,
+                "userId" to userId,
+                "scientificName" to scientificName,
+                "confidence" to confidence,
+                "status" to "pending",
+                "flaggedAt" to Timestamp.now(),
+                "reason" to "low_confidence_user_confirmed"
+            )
+
+            val flagDocId = "${userId}_${observationId}"
+            db.collection("flagQueue").document(flagDocId)
+                .set(flagData, SetOptions.merge()) // merge = update existing if spammed
+                .await()
+
+            Log.d("FlagQueue", "⚠️ Added $scientificName to flagQueue (confidence=$confidence)")
         } else {
+            // ✅ High confidence → add to trainingData
             val trainingData = TrainingData(
                 trainingId = UUID.randomUUID().toString(),
                 plantId = plantId,
@@ -366,7 +390,7 @@ class FirebaseRepository(private val context: Context) {
                 verifiedBy = userId,
                 verificationDate = Timestamp.now(),
                 verificationMethod = "user_confirmation",
-                confidenceScore = 1.0,
+                confidenceScore = confidence,
                 geolocation = observation.geolocation,
                 isActive = true,
                 sourceApi = "user_verified"
@@ -375,11 +399,14 @@ class FirebaseRepository(private val context: Context) {
             trainingDataCollection.document(trainingData.trainingId)
                 .set(trainingData, SetOptions.merge())
                 .await()
+
+            Log.d("TrainingData", "✅ Saved high-confidence training data for $scientificName")
         }
 
         updateUserContributionStats(userId, "verifiedIdentifications")
         return "Observation $observationId confirmed successfully"
     }
+
 
     private suspend fun updateUserContributionStats(userId: String, field: String) {
         try {
