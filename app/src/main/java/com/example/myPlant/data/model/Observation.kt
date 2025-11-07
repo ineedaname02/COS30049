@@ -10,6 +10,8 @@ data class Observation(
     val geolocation: GeoLocation? = null,
     val userNote: String = "",
 
+    val locationName: String? = null,
+
     // Multiple AI Sources
     val aiSuggestions: List<AISuggestion> = emptyList(),
     val primarySource: String = "plantnet", // "plantnet", "smartplant_ai", "hybrid"
@@ -32,10 +34,13 @@ data class Observation(
 data class CurrentIdentification(
     val plantId: String = "",
     val scientificName: String = "",
+    val commonName: String = "",
+    val family: String = "",
     val confidence: Double = 0.0,
-    val identifiedBy: String = "ai", // 'ai', 'admin', 'community'
+    val identifiedBy: String = "ai",
     val status: String = "ai_suggested"
 )
+
 
 data class FlagInfo(
     val isFlagged: Boolean = false,

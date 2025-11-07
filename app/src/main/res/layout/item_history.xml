@@ -12,17 +12,39 @@
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:padding="12dp">
+        android:padding="16dp">
 
-        <ImageView
-            android:id="@+id/historyImage"
+        <!-- Image with count badge -->
+        <RelativeLayout
+            android:id="@+id/imageContainer"
             android:layout_width="80dp"
             android:layout_height="80dp"
-            android:scaleType="centerCrop"
             app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintTop_toTopOf="parent"
-            tools:src="@drawable/ic_menu_gallery" />
+            app:layout_constraintTop_toTopOf="parent">
 
+            <ImageView
+                android:id="@+id/historyImage"
+                android:layout_width="80dp"
+                android:layout_height="80dp"
+                android:scaleType="centerCrop"
+                tools:src="@drawable/ic_menu_gallery" />
+
+            <TextView
+                android:id="@+id/imageCountBadge"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_alignBottom="@id/historyImage"
+                android:layout_alignEnd="@id/historyImage"
+                android:background="@color/red"
+                android:gravity="center"
+                android:textColor="@android:color/white"
+                android:textSize="10sp"
+                android:visibility="gone"
+                tools:text="+2" />
+
+        </RelativeLayout>
+
+        <!-- Plant Names -->
         <TextView
             android:id="@+id/historyScientificName"
             android:layout_width="0dp"
@@ -31,33 +53,106 @@
             android:textAppearance="?attr/textAppearanceListItem"
             android:textStyle="bold"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintStart_toEndOf="@id/historyImage"
-            app:layout_constraintTop_toTopOf="@id/historyImage"
+            app:layout_constraintStart_toEndOf="@id/imageContainer"
+            app:layout_constraintTop_toTopOf="@id/imageContainer"
             tools:text="Quercus robur" />
 
         <TextView
-            android:id="@+id/historyDate"
+            android:id="@+id/historyCommonName"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
+            android:layout_marginTop="2dp"
             android:textAppearance="?attr/textAppearanceListItemSecondary"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="@id/historyScientificName"
             app:layout_constraintTop_toBottomOf="@id/historyScientificName"
-            tools:text="24 Oct 2025, 8:30 AM" />
+            tools:text="Common Oak" />
 
-        <TextView
-            android:id="@+id/iucnStatus"
+
+
+        <!-- Identification Source and Status -->
+        <LinearLayout
+            android:id="@+id/identificationRow"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            android:textAppearance="?attr/textAppearanceCaption"
+            android:orientation="horizontal"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="@id/historyScientificName"
-            app:layout_constraintTop_toBottomOf="@id/historyDate"
-            tools:text="IUCN Status: Least Concern" />
+            app:layout_constraintTop_toBottomOf="@id/historyCommonName">
+
+            <TextView
+                android:id="@+id/identificationSource"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textAppearance="?attr/textAppearanceCaption"
+                android:textColor="?android:attr/textColorSecondary"
+                tools:text="AI Identification" />
+
+
+        </LinearLayout>
+
+        <!-- Confidence and IUCN Status Row -->
+        <LinearLayout
+            android:id="@+id/statusRow"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:orientation="horizontal"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="@id/historyScientificName"
+            app:layout_constraintTop_toBottomOf="@id/identificationRow">
+
+            <TextView
+                android:id="@+id/confidenceScore"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="8dp"
+                android:textAppearance="?attr/textAppearanceCaption"
+                android:textStyle="bold"
+                tools:text="85.2%" />
+
+            <TextView
+                android:id="@+id/iucnStatus"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textAppearance="?attr/textAppearanceCaption"
+                android:textColor="?android:attr/textColorSecondary"
+                tools:text="IUCN: Least Concern" />
+
+        </LinearLayout>
+
+        <!-- Location and Date Row -->
+        <LinearLayout
+            android:id="@+id/infoRow"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:orientation="horizontal"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="@id/historyScientificName"
+            app:layout_constraintTop_toBottomOf="@id/statusRow">
+
+            <TextView
+                android:id="@+id/historyLocation"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textAppearance="?attr/textAppearanceCaption"
+                android:textColor="?android:attr/textColorSecondary"
+                tools:text="Central Park, New York" />
+
+            <TextView
+                android:id="@+id/historyDate"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textAppearance="?attr/textAppearanceCaption"
+                android:textColor="?android:attr/textColorSecondary"
+                tools:text="24 Oct 2025, 8:30 AM" />
+
+        </LinearLayout>
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 
 </androidx.cardview.widget.CardView>
-    

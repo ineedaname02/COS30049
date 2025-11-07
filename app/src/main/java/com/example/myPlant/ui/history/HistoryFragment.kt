@@ -56,7 +56,7 @@ class HistoryFragment : Fragment() {
             return
         }
 
-        // ✅ Observe once — LiveData will auto-update when userObservations changes
+        // Observe the observations data
         viewModel.userObservations.observe(viewLifecycleOwner) { observations ->
             if (observations.isNullOrEmpty()) {
                 binding.textEmptyHistory.apply {
@@ -71,7 +71,7 @@ class HistoryFragment : Fragment() {
             }
         }
 
-        // ✅ Trigger load only if data is not already present
+        // Load data if not already present
         if (viewModel.userObservations.value.isNullOrEmpty()) {
             viewModel.loadUserObservations()
         }

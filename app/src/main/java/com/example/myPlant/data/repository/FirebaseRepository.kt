@@ -73,7 +73,12 @@ class FirebaseRepository(private val context: Context) {
         val primarySource = if (smartPlantAISuggestions.isNotEmpty()) "hybrid" else "plantnet"
         val initialStatus = if (topConfidence > 0.7) "ai_suggested" else "needs_review"
 
-        // 4️⃣ Create Observation
+        // 4️⃣ Extract common name and family from the PlantNet response
+        val topPlantNetResult = plantNetResponse?.results?.firstOrNull()
+        val commonName = topPlantNetResult?.species?.commonNames?.firstOrNull() ?: ""
+        val family = topPlantNetResult?.species?.family?.scientificNameWithoutAuthor ?: ""
+
+        // 5️⃣ Create Observation with all the new fields
         val observation = Observation(
             observationId = observationId,
             userId = currentUser.uid,
@@ -85,15 +90,17 @@ class FirebaseRepository(private val context: Context) {
             currentIdentification = CurrentIdentification(
                 plantId = topSuggestion?.plantId ?: "",
                 scientificName = topSuggestion?.scientificName ?: "Unknown",
+                commonName = commonName, // ✅ Set common name from PlantNet
+                family = family, // ✅ Set family from PlantNet
                 confidence = topConfidence,
-                identifiedBy = "ai",
+                identifiedBy = "ai", // ✅ Set identifiedBy
                 status = initialStatus
             ),
             iucnCategory = iucnCategory,
             timestamp = com.google.firebase.Timestamp.now()
         )
 
-        // 5️⃣ Upload to Firestore
+        // 6️⃣ Upload to Firestore
         val userObservationsRef = FirebaseFirestore.getInstance()
             .collection("users")
             .document(currentUser.uid)
@@ -103,33 +110,30 @@ class FirebaseRepository(private val context: Context) {
             .set(observation)
             .await()
 
-        // 6️⃣ Update plants catalog
+        // 7️⃣ Update plants catalog
         updatePlantsCatalog(allSuggestions)
 
-        // 7️⃣ Add to training data if confident
-        // TODO Need adjust confidence level
+        // 8️⃣ Add to training data if confident
         if (topConfidence > 0.8 && topSuggestion != null) {
             addToTrainingDataIfConfident(observation, topSuggestion)
         }
 
-        // 8️⃣ Update user stats
+        // 9️⃣ Update user stats
         updateUserContributionStats(currentUser.uid, "observations")
 
-
-// 🆕 7.5️⃣ Add to flag queue if AI unsure (low confidence)
+        // 🔟 Add to flag queue if AI unsure (low confidence)
         if (topConfidence <= 0.7) {
             val currentUser = auth.currentUser
             if (currentUser != null) {
                 val flagData = mapOf(
                     "observationId" to observationId,
-                    "userId" to currentUser.uid, // ✅ Added field
+                    "userId" to currentUser.uid,
                     "flaggedBy" to currentUser.uid,
                     "flaggedAt" to Timestamp.now(),
                     "reason" to "Low confidence AI prediction (${String.format("%.2f", topConfidence)})",
                     "status" to "pending",
                     "priority" to if (topConfidence < 0.4) "high" else "medium"
                 )
-
 
                 flagQueueCollection.document(observationId)
                     .set(flagData, SetOptions.merge())
@@ -139,7 +143,7 @@ class FirebaseRepository(private val context: Context) {
             }
         }
 
-// 🆕 7.6️⃣ Flag and log endangered species for conservation tracking
+        // 🆕 Flag and log endangered species for conservation tracking
         if (!iucnCategory.isNullOrEmpty()) {
             val endangeredCategories = listOf(
                 "extinct",
@@ -152,7 +156,7 @@ class FirebaseRepository(private val context: Context) {
                 if (currentUser != null) {
                     val endangeredData = mapOf(
                         "observationId" to observationId,
-                        "userId" to currentUser.uid, // ✅ Added for path lookup later
+                        "userId" to currentUser.uid,
                         "scientificName" to (topSuggestion?.scientificName ?: ""),
                         "iucnCategory" to iucnCategory,
                         "flaggedBy" to currentUser.uid,
@@ -162,7 +166,6 @@ class FirebaseRepository(private val context: Context) {
                         "priority" to "high"
                     )
 
-                    // 🧩 1️⃣ Add to flagQueue for admin awareness
                     flagQueueCollection.document("endangered_$observationId")
                         .set(endangeredData, SetOptions.merge())
                         .await()
@@ -320,12 +323,13 @@ class FirebaseRepository(private val context: Context) {
     suspend fun confirmObservation(
         observationId: String,
         plantId: String,
-        scientificName: String
+        scientificName: String,
+        commonName: String = "", // ✅ Add commonName parameter
+        family: String = "" // ✅ Add family parameter
     ): String {
         val currentUser = auth.currentUser ?: throw Exception("User not authenticated")
         val userId = currentUser.uid
 
-        // Prefer the user’s own observation path
         val docRef = db.collection("users").document(userId)
             .collection("observations").document(observationId)
 
@@ -333,12 +337,14 @@ class FirebaseRepository(private val context: Context) {
         val observation = snapshot.toObject(Observation::class.java)
             ?: throw Exception("Observation $observationId not found")
 
-        // Update Firestore observation
+        // Update Firestore observation with all fields
         docRef.update(
             mapOf(
                 "currentIdentification.plantId" to plantId,
                 "currentIdentification.scientificName" to scientificName,
-                "currentIdentification.identifiedBy" to "user_confirmed",
+                "currentIdentification.commonName" to commonName, // ✅ Set commonName
+                "currentIdentification.family" to family, // ✅ Set family
+                "currentIdentification.identifiedBy" to "user_confirmed", // ✅ Set identifiedBy
                 "currentIdentification.status" to "user_verified",
                 "flagInfo" to null
             )
@@ -375,7 +381,7 @@ class FirebaseRepository(private val context: Context) {
 
             val flagDocId = "${userId}_${observationId}"
             db.collection("flagQueue").document(flagDocId)
-                .set(flagData, SetOptions.merge()) // merge = update existing if spammed
+                .set(flagData, SetOptions.merge())
                 .await()
 
             Log.d("FlagQueue", "⚠️ Added $scientificName to flagQueue (confidence=$confidence)")
@@ -513,7 +519,8 @@ class FirebaseRepository(private val context: Context) {
         adminId: String,
         isCorrect: Boolean,
         correctedScientificName: String? = null,
-        correctedCommonName: String? = null
+        correctedCommonName: String? = null,
+        correctedFamily: String? = null // ✅ Add family parameter
     ): Boolean {
         return try {
             val db = FirebaseFirestore.getInstance()
@@ -595,11 +602,13 @@ class FirebaseRepository(private val context: Context) {
                 "verifiedBy" to adminId,
                 "isCorrect" to isCorrect,
                 "verifiedAt" to com.google.firebase.Timestamp.now(),
-                "currentIdentification.status" to if (isCorrect) "admin_verified" else "admin_corrected"
+                "currentIdentification.status" to if (isCorrect) "admin_verified" else "admin_corrected",
+                "currentIdentification.identifiedBy" to "admin" // ✅ Set identifiedBy
             )
 
             correctedScientificName?.let { updateData["currentIdentification.scientificName"] = it }
             correctedCommonName?.let { updateData["currentIdentification.commonName"] = it }
+            correctedFamily?.let { updateData["currentIdentification.family"] = it }
 
             // 4) Update the observation document
             docRefToUpdate.update(updateData).await()

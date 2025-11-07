@@ -20,7 +20,7 @@
     <color name="surface_grey">#FFF5F5F5</color>
     
     <!-- Text Colors -->
-    <color name="text_primary">#FF212121</color>
+        <color name="text_primary">#FF212121</color>
     <color name="text_secondary">#FF757575</color>
     <color name="text_hint">#FFBDBDBD</color>
     <color name="text_white">#FFFFFFFF</color>
@@ -45,5 +45,24 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+
+    <color name="red">#F01809</color>
+
+    <color name="high_confidence">#4CAF50</color> <!-- green -->
+    <color name="medium_confidence">#FFC107</color> <!-- amber -->
+    <color name="low_confidence">#F44336</color> <!-- red -->
+
+    <color name="iucn_extinct">#000000</color>           <!-- Black -->
+    <color name="iucn_critically_endangered">#D32F2F</color> <!-- Red 700 -->
+    <color name="iucn_endangered">#F44336</color>       <!-- Red 500 -->
+    <color name="iucn_vulnerable">#FF9800</color>       <!-- Orange 500 -->
+    <color name="iucn_near_threatened">#FFEB3B</color>  <!-- Yellow 500 -->
+    <color name="iucn_least_concern">#4CAF50</color>    <!-- Green 500 -->
+    <color name="iucn_data_deficient">#9E9E9E</color>   <!-- Gray 500 -->
+
+    <color name="verified_status">#4CAF50</color> <!-- Green -->
+    <color name="pending_status">#FFC107</color> <!-- Amber -->
+    <color name="rejected_status">#F44336</color> <!-- Red -->
+    <color name="ai_suggested_status">#9E9E9E</color> <!-- Gray -->
 
 </resources>
