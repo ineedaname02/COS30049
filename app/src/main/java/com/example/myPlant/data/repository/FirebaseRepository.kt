@@ -13,7 +13,7 @@ import com.google.firebase.firestore.FieldPath
 import kotlinx.coroutines.tasks.await
 import java.util.UUID
 import com.google.firebase.firestore.Query
-import kotlinx.coroutines.tasks.await
+import com.google.firebase.firestore.FieldValue
 
 class FirebaseRepository(private val context: Context) {
 
@@ -122,28 +122,29 @@ class FirebaseRepository(private val context: Context) {
         updateUserContributionStats(currentUser.uid, "observations")
 
         // 🔟 Add to flag queue if AI unsure (low confidence)
-        if (topConfidence <= 0.7) {
-            val currentUser = auth.currentUser
-            if (currentUser != null) {
-                val flagData = mapOf(
-                    "observationId" to observationId,
-                    "userId" to currentUser.uid,
-                    "flaggedBy" to currentUser.uid,
-                    "flaggedAt" to Timestamp.now(),
-                    "reason" to "Low confidence AI prediction (${String.format("%.2f", topConfidence)})",
-                    "status" to "pending",
-                    "priority" to if (topConfidence < 0.4) "high" else "medium"
-                )
+        // 🔟 Add to flag queue only for low-confidence, non-endangered AI predictions
+        val endangeredCategories = listOf("extinct", "extinct in the wild", "critically endangered", "endangered")
+        val isEndangered = !iucnCategory.isNullOrEmpty() && iucnCategory.lowercase() in endangeredCategories
 
-                flagQueueCollection.document(observationId)
-                    .set(flagData, SetOptions.merge())
-                    .await()
+        if (topConfidence <= 0.7 && !isEndangered) {
+            val flagDocId = "${currentUser.uid}_$observationId"
+            val flagData = mapOf(
+                "observationId" to observationId,
+                "userId" to currentUser.uid,
+                "flaggedBy" to currentUser.uid,
+                "flaggedAt" to Timestamp.now(),
+                "reason" to "Low confidence AI prediction (${String.format("%.2f", topConfidence)})",
+                "status" to "pending",
+                "priority" to if (topConfidence < 0.4) "high" else "medium"
+            )
 
-                Log.d("FlagQueue", "⚠️ Added low-confidence observation $observationId to flagQueue")
-            }
+            flagQueueCollection.document(flagDocId)
+                .set(flagData, SetOptions.merge())
+                .await()
         }
 
         // 🆕 Flag and log endangered species for conservation tracking
+        // 🔟 Merge AI flag into single flagQueue document
         if (!iucnCategory.isNullOrEmpty()) {
             val endangeredCategories = listOf(
                 "extinct",
@@ -152,28 +153,27 @@ class FirebaseRepository(private val context: Context) {
                 "endangered"
             )
             if (iucnCategory.lowercase() in endangeredCategories) {
-                val currentUser = auth.currentUser
-                if (currentUser != null) {
-                    val endangeredData = mapOf(
-                        "observationId" to observationId,
-                        "userId" to currentUser.uid,
-                        "scientificName" to (topSuggestion?.scientificName ?: ""),
-                        "iucnCategory" to iucnCategory,
-                        "flaggedBy" to currentUser.uid,
-                        "flaggedAt" to Timestamp.now(),
-                        "reason" to "Detected endangered species ($iucnCategory)",
-                        "status" to "pending",
-                        "priority" to "high"
-                    )
+                val flagDocId = "${currentUser.uid}_$observationId" // use same ID as user flags
+                val flagData = mapOf(
+                    "observationId" to observationId,
+                    "userId" to currentUser.uid,
+                    "scientificName" to (topSuggestion?.scientificName ?: ""),
+                    "iucnCategory" to iucnCategory,
+                    "flaggedBy" to FieldValue.arrayUnion(currentUser.uid), // track all flaggers
+                    "flaggedAt" to Timestamp.now(),
+                    "reason" to FieldValue.arrayUnion("Detected endangered species ($iucnCategory)"),
+                    "status" to "pending",
+                    "priority" to "high"
+                )
 
-                    flagQueueCollection.document("endangered_$observationId")
-                        .set(endangeredData, SetOptions.merge())
-                        .await()
+                flagQueueCollection.document(flagDocId)
+                    .set(flagData, SetOptions.merge())
+                    .await()
 
-                    Log.d("FlagQueue", "🚨 Added endangered species $observationId to flagQueue")
-                }
+                Log.d("FlagQueue", "🚨 Added endangered species $observationId to flagQueue (merged)")
             }
         }
+
 
         return observationId
     }
@@ -302,18 +302,20 @@ class FirebaseRepository(private val context: Context) {
         ).await()
 
         // Add to flag queue for admin review
-        flagQueueCollection.document(observationId)
-            .set(
-                mapOf(
-                    "userId" to userId,
-                    "observationId" to observationId,
-                    "flaggedAt" to Timestamp.now(),
-                    "status" to "pending",
-                    "reason" to reason
-                ),
-                SetOptions.merge()
-            )
+        val flagDocId = "${userId}_$observationId" // stable ID
+        val flagData = mapOf(
+            "observationId" to observationId,
+            "userId" to userId,
+            "flaggedAt" to Timestamp.now(),
+            "status" to "pending",
+            "flaggedBy" to FieldValue.arrayUnion(userId), // track multiple flaggers
+            "reason" to FieldValue.arrayUnion(reason) // keep AI + user reasons together
+        )
+
+        flagQueueCollection.document(flagDocId)
+            .set(flagData, SetOptions.merge())
             .await()
+
 
 
         updateUserContributionStats(userId, "flagsSubmitted")
