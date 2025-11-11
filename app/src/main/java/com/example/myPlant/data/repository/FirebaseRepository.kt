@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.util.Log
 import com.example.myPlant.data.model.*
+import com.example.myPlant.data.encryption.BiodiversityEncryptionService
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
@@ -31,6 +32,8 @@ class FirebaseRepository(private val context: Context) {
     /**
      * Upload a new plant observation with AI/PlantNet data and images.
      */
+
+    private val encryptionService = BiodiversityEncryptionService(context)
     suspend fun uploadPlantObservation(
         plantNetResponse: PlantNetResponse?,
         smartPlantAISuggestions: List<AISuggestion> = emptyList(),
@@ -79,24 +82,47 @@ class FirebaseRepository(private val context: Context) {
         val family = topPlantNetResult?.species?.family?.scientificNameWithoutAuthor ?: ""
 
         // 5️⃣ Create Observation with all the new fields
+        val encryptedUserNote = encryptionService.encrypt(userNote)
+
+        // Only encrypt IUCN if it's endangered
+        val (publicIUCN, encryptedIUCN) = if (encryptionService.shouldEncryptIUCN(iucnCategory)) {
+            Pair("Protected Species", encryptionService.encrypt(iucnCategory!!))
+        } else {
+            Pair(iucnCategory, null)
+        }
+
+        // Encrypt location (always encrypt exact coordinates)
+        val encryptedLocation = location?.let {
+            encryptionService.encrypt("${it.lat},${it.lng}")
+        }
+
+        // Create generalized location for public view
+        val generalLocation = location?.let {
+            "Area: ${"%.2f".format(it.lat)}, ${"%.2f".format(it.lng)}"
+        }
+
+        // 5️⃣ Create Observation with encrypted fields
         val observation = Observation(
             observationId = observationId,
             userId = currentUser.uid,
             plantImageUrls = imageUrls,
-            geolocation = location,
-            userNote = userNote,
+            geolocation = location, // Keep original for now (we'll modify structure)
+            userNote = encryptedUserNote, // ✅ Encrypted
+            locationName = generalLocation, // ✅ Generalized for public view
+
             aiSuggestions = allSuggestions,
             primarySource = primarySource,
             currentIdentification = CurrentIdentification(
                 plantId = topSuggestion?.plantId ?: "",
                 scientificName = topSuggestion?.scientificName ?: "Unknown",
-                commonName = commonName, // ✅ Set common name from PlantNet
-                family = family, // ✅ Set family from PlantNet
+                commonName = commonName,
+                family = family,
                 confidence = topConfidence,
-                identifiedBy = "ai", // ✅ Set identifiedBy
+                identifiedBy = "ai",
                 status = initialStatus
             ),
-            iucnCategory = iucnCategory,
+            iucnCategory = publicIUCN, // ✅ Public version (generalized)
+            encryptedIUCN = encryptedIUCN, // ✅ Add this new field for encrypted version
             timestamp = com.google.firebase.Timestamp.now()
         )
 
@@ -176,6 +202,63 @@ class FirebaseRepository(private val context: Context) {
 
 
         return observationId
+    }
+
+    suspend fun getDecryptedUserObservations(userId: String): List<Observation> {
+        val observations = getUserObservations(userId)
+        return observations.map { observation ->
+            decryptObservationForUser(observation, userId)
+        }
+    }
+
+    suspend fun getDecryptedObservationsForAdmin(userId: String? = null): List<Observation> {
+        val observations = if (userId != null) {
+            getUserObservations(userId)
+        } else {
+            getAllObservations()
+        }
+
+        return observations.map { observation ->
+            decryptObservationForAdmin(observation)
+        }
+    }
+
+    private fun decryptObservationForUser(observation: Observation, currentUserId: String): Observation {
+        return if (observation.userId == currentUserId) {
+            // User owns this - decrypt their data
+            observation.copy(
+                userNote = encryptionService.decrypt(observation.userNote),
+                iucnCategory = observation.encryptedIUCN?.let { encryptionService.decrypt(it) } ?: observation.iucnCategory
+            )
+        } else {
+            // User viewing someone else's data - show public data only
+            observation.copy(
+                userNote = "", // Hide encrypted notes
+                geolocation = null, // Hide exact location
+                iucnCategory = observation.iucnCategory // Show public version only
+            )
+        }
+    }
+
+    private fun decryptObservationForAdmin(observation: Observation): Observation {
+        // Admin can decrypt everything
+        return observation.copy(
+            userNote = encryptionService.decrypt(observation.userNote),
+            iucnCategory = observation.encryptedIUCN?.let { encryptionService.decrypt(it) } ?: observation.iucnCategory
+        )
+    }
+
+    /**
+     * Check if current user is admin
+     */
+    private suspend fun isCurrentUserAdmin(): Boolean {
+        val currentUser = auth.currentUser ?: return false
+        return try {
+            val userDoc = db.collection("users").document(currentUser.uid).get().await()
+            userDoc.getBoolean("isAdmin") ?: false
+        } catch (e: Exception) {
+            false
+        }
     }
 
     private fun generatePlantId(result: Result): String {
