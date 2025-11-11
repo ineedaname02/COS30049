@@ -1,8 +1,10 @@
 package com.example.myPlant.ui.auth
 
+import android.content.Intent
 import android.os.Bundle
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.Toolbar
 import com.example.myPlant.R
 import com.example.myPlant.data.repository.AuthRepository
 import com.google.firebase.FirebaseException
@@ -10,7 +12,6 @@ import com.google.firebase.auth.PhoneAuthProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import android.content.Intent
 
 class EnableMfaActivity : AppCompatActivity() {
 
@@ -21,6 +22,11 @@ class EnableMfaActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_enable_mfa)
+
+        val toolbar = findViewById<Toolbar>(R.id.toolbar)
+        setSupportActionBar(toolbar)
+
+        supportActionBar?.title = "Enable Multi-Factor Authentication"
 
         val phoneField = findViewById<EditText>(R.id.phoneField)
         val codeField = findViewById<EditText>(R.id.codeField)

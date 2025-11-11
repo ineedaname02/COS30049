@@ -9,10 +9,8 @@
         <item name="colorSecondary">@color/primary_green_light</item>
         <item name="colorSecondaryVariant">@color/primary_green_light</item>
         <item name="colorOnSecondary">@color/primary_green_light</item>
-    <!-- Status bar color: always black for the whole app -->
-    <item name="android:statusBarColor">@color/black</item>
-    <!-- Force status bar icons to be light (white) -->
-    <item name="android:windowLightStatusBar">false</item>
+        <!-- Force status bar icons to be dark -->
+        <item name="android:windowLightStatusBar">true</item>
     </style>
 
     <style name="Theme.COS30049.NoActionBar">
