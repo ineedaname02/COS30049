@@ -23,9 +23,6 @@ class EnableMfaActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_enable_mfa)
 
-        val toolbar = findViewById<Toolbar>(R.id.toolbar)
-        setSupportActionBar(toolbar)
-
         supportActionBar?.title = "Enable Multi-Factor Authentication"
 
         val phoneField = findViewById<EditText>(R.id.phoneField)
