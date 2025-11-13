@@ -4,7 +4,6 @@ import android.content.Context
 import android.net.Uri
 import android.util.Log
 import com.example.myPlant.data.model.*
-import com.example.myPlant.data.encryption.BiodiversityEncryptionService
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
@@ -14,14 +13,13 @@ import com.google.firebase.firestore.FieldPath
 import kotlinx.coroutines.tasks.await
 import java.util.UUID
 import com.google.firebase.firestore.Query
-import com.google.firebase.firestore.FieldValue
+import kotlinx.coroutines.tasks.await
 
 class FirebaseRepository(private val context: Context) {
 
     private val auth = FirebaseAuth.getInstance()
     private val storage = FirebaseStorage.getInstance()
     private val db = FirebaseFirestore.getInstance()
-    private val endangeredDataCollection = db.collection("EndangeredData")
 
     private val observationsCollection = db.collection("observations")
     private val trainingDataCollection = db.collection("trainingData")
@@ -33,8 +31,6 @@ class FirebaseRepository(private val context: Context) {
     /**
      * Upload a new plant observation with AI/PlantNet data and images.
      */
-
-    private val encryptionService = BiodiversityEncryptionService(context)
     suspend fun uploadPlantObservation(
         plantNetResponse: PlantNetResponse?,
         smartPlantAISuggestions: List<AISuggestion> = emptyList(),
@@ -75,7 +71,7 @@ class FirebaseRepository(private val context: Context) {
         val topSuggestion = allSuggestions.firstOrNull()
         val topConfidence = topSuggestion?.confidence ?: 0.0
         val primarySource = if (smartPlantAISuggestions.isNotEmpty()) "hybrid" else "plantnet"
-        val initialStatus = if (topConfidence > 0.8) "ai_suggested" else "needs_review"
+        val initialStatus = if (topConfidence > 0.7) "ai_suggested" else "needs_review"
 
         // 4️⃣ Extract common name and family from the PlantNet response
         val topPlantNetResult = plantNetResponse?.results?.firstOrNull()
@@ -83,47 +79,24 @@ class FirebaseRepository(private val context: Context) {
         val family = topPlantNetResult?.species?.family?.scientificNameWithoutAuthor ?: ""
 
         // 5️⃣ Create Observation with all the new fields
-        val encryptedUserNote = encryptionService.encrypt(userNote)
-
-        // Only encrypt IUCN if it's endangered
-        val (publicIUCN, encryptedIUCN) = if (encryptionService.shouldEncryptIUCN(iucnCategory)) {
-            Pair("Protected Species", encryptionService.encrypt(iucnCategory!!))
-        } else {
-            Pair(iucnCategory, null)
-        }
-
-        // Encrypt location (always encrypt exact coordinates)
-        val encryptedLocation = location?.let {
-            encryptionService.encrypt("${it.lat},${it.lng}")
-        }
-
-        // Create generalized location for public view
-        val generalLocation = location?.let {
-            "Area: ${"%.2f".format(it.lat)}, ${"%.2f".format(it.lng)}"
-        }
-
-        // 5️⃣ Create Observation with encrypted fields
         val observation = Observation(
             observationId = observationId,
             userId = currentUser.uid,
             plantImageUrls = imageUrls,
-            geolocation = location, // Keep original for now (we'll modify structure)
-            userNote = encryptedUserNote, // ✅ Encrypted
-            locationName = generalLocation, // ✅ Generalized for public view
-
+            geolocation = location,
+            userNote = userNote,
             aiSuggestions = allSuggestions,
             primarySource = primarySource,
             currentIdentification = CurrentIdentification(
                 plantId = topSuggestion?.plantId ?: "",
                 scientificName = topSuggestion?.scientificName ?: "Unknown",
-                commonName = commonName,
-                family = family,
+                commonName = commonName, // ✅ Set common name from PlantNet
+                family = family, // ✅ Set family from PlantNet
                 confidence = topConfidence,
-                identifiedBy = "ai",
+                identifiedBy = "ai", // ✅ Set identifiedBy
                 status = initialStatus
             ),
-            iucnCategory = publicIUCN, // ✅ Public version (generalized)
-            encryptedIUCN = encryptedIUCN, // ✅ Add this new field for encrypted version
+            iucnCategory = iucnCategory,
             timestamp = com.google.firebase.Timestamp.now()
         )
 
@@ -149,35 +122,9 @@ class FirebaseRepository(private val context: Context) {
         updateUserContributionStats(currentUser.uid, "observations")
 
         // 🔟 Add to flag queue if AI unsure (low confidence)
-        // 🔟 Add to flag queue only for low-confidence, non-endangered AI predictions
-        val endangeredCategories = listOf("extinct", "extinct in the wild", "critically endangered", "endangered")
-        val isEndangered = !iucnCategory.isNullOrEmpty() && iucnCategory.lowercase() in endangeredCategories
-
-        if (topConfidence <= 0.8 && !isEndangered) {
-            val flagDocId = "${currentUser.uid}_$observationId"
-            val flagData = mapOf(
-                "observationId" to observationId,
-                "userId" to currentUser.uid,
-                "flaggedBy" to currentUser.uid,
-                "flaggedAt" to Timestamp.now(),
-                "reason" to "Low confidence AI prediction (${String.format("%.2f", topConfidence)})",
-                "status" to "pending",
-                "priority" to if (topConfidence < 0.5) "high" else "medium"
-            )
-
-            flagQueueCollection.document(flagDocId)
-                .set(flagData, SetOptions.merge())
-                .await()
-        }
-
-        if (!iucnCategory.isNullOrEmpty()) {
-            // 🔟 Add to flag queue ONLY for low-confidence (< 0.5), non-endangered AI predictions
-            val endangeredCategories = listOf("extinct", "extinct in the wild", "critically endangered", "endangered")
-            val isEndangered = !iucnCategory.isNullOrEmpty() && iucnCategory.lowercase() in endangeredCategories
-
-// 🚨 ONLY add to flagQueue for confidence < 0.5 (not ≤ 0.8)
-            if (topConfidence < 0.5 && !isEndangered) {
-                val flagDocId = "${currentUser.uid}_$observationId"
+        if (topConfidence <= 0.7) {
+            val currentUser = auth.currentUser
+            if (currentUser != null) {
                 val flagData = mapOf(
                     "observationId" to observationId,
                     "userId" to currentUser.uid,
@@ -185,10 +132,10 @@ class FirebaseRepository(private val context: Context) {
                     "flaggedAt" to Timestamp.now(),
                     "reason" to "Low confidence AI prediction (${String.format("%.2f", topConfidence)})",
                     "status" to "pending",
-                    "priority" to "high" // All low confidence gets high priority
+                    "priority" to if (topConfidence < 0.4) "high" else "medium"
                 )
 
-                flagQueueCollection.document(flagDocId)
+                flagQueueCollection.document(observationId)
                     .set(flagData, SetOptions.merge())
                     .await()
 
@@ -196,65 +143,39 @@ class FirebaseRepository(private val context: Context) {
             }
         }
 
+        // 🆕 Flag and log endangered species for conservation tracking
+        if (!iucnCategory.isNullOrEmpty()) {
+            val endangeredCategories = listOf(
+                "extinct",
+                "extinct in the wild",
+                "critically endangered",
+                "endangered"
+            )
+            if (iucnCategory.lowercase() in endangeredCategories) {
+                val currentUser = auth.currentUser
+                if (currentUser != null) {
+                    val endangeredData = mapOf(
+                        "observationId" to observationId,
+                        "userId" to currentUser.uid,
+                        "scientificName" to (topSuggestion?.scientificName ?: ""),
+                        "iucnCategory" to iucnCategory,
+                        "flaggedBy" to currentUser.uid,
+                        "flaggedAt" to Timestamp.now(),
+                        "reason" to "Detected endangered species ($iucnCategory)",
+                        "status" to "pending",
+                        "priority" to "high"
+                    )
+
+                    flagQueueCollection.document("endangered_$observationId")
+                        .set(endangeredData, SetOptions.merge())
+                        .await()
+
+                    Log.d("FlagQueue", "🚨 Added endangered species $observationId to flagQueue")
+                }
+            }
+        }
 
         return observationId
-    }
-
-    suspend fun getDecryptedUserObservations(userId: String): List<Observation> {
-        val observations = getUserObservations(userId)
-        return observations.map { observation ->
-            decryptObservationForUser(observation, userId)
-        }
-    }
-
-    suspend fun getDecryptedObservationsForAdmin(userId: String? = null): List<Observation> {
-        val observations = if (userId != null) {
-            getUserObservations(userId)
-        } else {
-            getAllObservations()
-        }
-
-        return observations.map { observation ->
-            decryptObservationForAdmin(observation)
-        }
-    }
-
-    private fun decryptObservationForUser(observation: Observation, currentUserId: String): Observation {
-        return if (observation.userId == currentUserId) {
-            // User owns this - decrypt their data
-            observation.copy(
-                userNote = encryptionService.decrypt(observation.userNote),
-                iucnCategory = observation.encryptedIUCN?.let { encryptionService.decrypt(it) } ?: observation.iucnCategory
-            )
-        } else {
-            // User viewing someone else's data - show public data only
-            observation.copy(
-                userNote = "", // Hide encrypted notes
-                geolocation = null, // Hide exact location
-                iucnCategory = observation.iucnCategory // Show public version only
-            )
-        }
-    }
-
-    private fun decryptObservationForAdmin(observation: Observation): Observation {
-        // Admin can decrypt everything
-        return observation.copy(
-            userNote = encryptionService.decrypt(observation.userNote),
-            iucnCategory = observation.encryptedIUCN?.let { encryptionService.decrypt(it) } ?: observation.iucnCategory
-        )
-    }
-
-    /**
-     * Check if current user is admin
-     */
-    private suspend fun isCurrentUserAdmin(): Boolean {
-        val currentUser = auth.currentUser ?: return false
-        return try {
-            val userDoc = db.collection("users").document(currentUser.uid).get().await()
-            userDoc.getBoolean("isAdmin") ?: false
-        } catch (e: Exception) {
-            false
-        }
     }
 
     private fun generatePlantId(result: Result): String {
@@ -298,50 +219,62 @@ class FirebaseRepository(private val context: Context) {
         topSuggestion: AISuggestion
     ) {
         val scientificName = sanitizePlantName(topSuggestion.scientificName)
+
+
         val originalImageUrl = observation.plantImageUrls.firstOrNull()
+
+        // 🛑 Prevent endangered species from going into trainingData
+        val endangeredCategories = listOf(
+            "extinct",
+            "extinct in the wild",
+            "critically endangered",
+            "endangered"
+        )
+        val category = observation.iucnCategory?.lowercase()
+        if (category in endangeredCategories) {
+            saveEndangeredDataToFirestore(observation, source = "ai_auto_confident")
+            Log.d("TrainingData", "⚠️ Skipped trainingData: $scientificName is endangered")
+            return
+        }
 
         if (originalImageUrl.isNullOrEmpty()) return
 
-        val endangeredCategories = listOf(
-            "extinct", "extinct in the wild", "critically endangered", "endangered"
-        )
-        val category = observation.iucnCategory?.lowercase()
-        val isEndangered = category != null && endangeredCategories.contains(category)
-
         try {
-            // ✅ ALWAYS copy image to storage first
-            val newImageUrl = copyImageToTrainingStorage(originalImageUrl, scientificName)
-            if (newImageUrl.isNullOrEmpty()) return
+            // 🔹 1️⃣ Copy image from original Storage location to trainingData/
+            val sourceRef = FirebaseStorage.getInstance().getReferenceFromUrl(originalImageUrl)
+            val newFileName = "${UUID.randomUUID()}.jpg"
+            val destRef = storage.reference.child("trainingData/$scientificName/$newFileName")
 
-            if (isEndangered) {
-                // ✅ Use the renamed function
-                saveEndangeredDataFromObservation(observation, source = "ai_high_confidence")
-                Log.d("TrainingData", "🌱 Saved endangered species to EndangeredData: $scientificName")
-            } else {
-                val trainingData = TrainingData(
-                    trainingId = UUID.randomUUID().toString(),
-                    plantId = topSuggestion.plantId,
-                    imageUrl = newImageUrl, // Use the copied image URL
-                    // 🚨 MISSING FIELDS - need to add the rest
-                    sourceType = "ai_high_confidence",
-                    sourceObservationId = observation.observationId,
-                    verifiedBy = "ai_system",
-                    verificationDate = Timestamp.now(),
-                    verificationMethod = "auto_confidence",
-                    confidenceScore = topSuggestion.confidence,
-                    iucnCategory = observation.iucnCategory,
-                    isActive = true,
-                    sourceApi = topSuggestion.source,
-                    geolocation = observation.geolocation
-                )
-                trainingDataCollection.document(trainingData.trainingId)
-                    .set(trainingData, SetOptions.merge())
-                    .await()
-                Log.d("TrainingData", "✅ Saved training data for $scientificName")
-            }
+            // Download → upload via stream
+            val bytes = sourceRef.getBytes(5 * 1024 * 1024).await() // max 5MB per image
+            destRef.putBytes(bytes).await()
+            val newImageUrl = destRef.downloadUrl.await().toString()
+
+            // 🔹 2️⃣ Save metadata to Firestore
+            val trainingData = TrainingData(
+                trainingId = UUID.randomUUID().toString(),
+                plantId = topSuggestion.plantId,
+                imageUrl = newImageUrl, // use the copied image URL
+                sourceType = "ai_high_confidence",
+                sourceObservationId = observation.observationId,
+                verifiedBy = "ai_system",
+                verificationDate = Timestamp.now(),
+                verificationMethod = "auto_confidence",
+                confidenceScore = topSuggestion.confidence,
+                geolocation = observation.geolocation,
+                iucnCategory = observation.iucnCategory, // ✅ COPY THE FIELD HERE
+                isActive = true,
+                sourceApi = topSuggestion.source
+            )
+
+            trainingDataCollection.document(trainingData.trainingId)
+                .set(trainingData, SetOptions.merge())
+                .await()
+
+            Log.d("TrainingData", "✅ Saved training data for $scientificName")
 
         } catch (e: Exception) {
-            Log.e("TrainingData", "⚠️ Failed to process data for $scientificName: ${e.message}", e)
+            Log.e("TrainingData", "⚠️ Failed to save training data for $scientificName: ${e.message}", e)
         }
     }
 
@@ -369,20 +302,18 @@ class FirebaseRepository(private val context: Context) {
         ).await()
 
         // Add to flag queue for admin review
-        val flagDocId = "${userId}_$observationId" // stable ID
-        val flagData = mapOf(
-            "observationId" to observationId,
-            "userId" to userId,
-            "flaggedAt" to Timestamp.now(),
-            "status" to "pending",
-            "flaggedBy" to FieldValue.arrayUnion(userId), // track multiple flaggers
-            "reason" to FieldValue.arrayUnion(reason) // keep AI + user reasons together
-        )
-
-        flagQueueCollection.document(flagDocId)
-            .set(flagData, SetOptions.merge())
+        flagQueueCollection.document(observationId)
+            .set(
+                mapOf(
+                    "userId" to userId,
+                    "observationId" to observationId,
+                    "flaggedAt" to Timestamp.now(),
+                    "status" to "pending",
+                    "reason" to reason
+                ),
+                SetOptions.merge()
+            )
             .await()
-
 
 
         updateUserContributionStats(userId, "flagsSubmitted")
@@ -393,8 +324,8 @@ class FirebaseRepository(private val context: Context) {
         observationId: String,
         plantId: String,
         scientificName: String,
-        commonName: String = "",
-        family: String = ""
+        commonName: String = "", // ✅ Add commonName parameter
+        family: String = "" // ✅ Add family parameter
     ): String {
         val currentUser = auth.currentUser ?: throw Exception("User not authenticated")
         val userId = currentUser.uid
@@ -406,20 +337,20 @@ class FirebaseRepository(private val context: Context) {
         val observation = snapshot.toObject(Observation::class.java)
             ?: throw Exception("Observation $observationId not found")
 
-        // Update Firestore observation with all fields (KEEP THIS UNCHANGED)
+        // Update Firestore observation with all fields
         docRef.update(
             mapOf(
                 "currentIdentification.plantId" to plantId,
                 "currentIdentification.scientificName" to scientificName,
-                "currentIdentification.commonName" to commonName,
-                "currentIdentification.family" to family,
-                "currentIdentification.identifiedBy" to "user_confirmed",
+                "currentIdentification.commonName" to commonName, // ✅ Set commonName
+                "currentIdentification.family" to family, // ✅ Set family
+                "currentIdentification.identifiedBy" to "user_confirmed", // ✅ Set identifiedBy
                 "currentIdentification.status" to "user_verified",
                 "flagInfo" to null
             )
         ).await()
 
-        // Handle endangered species first (KEEP THIS UNCHANGED for Firestore)
+        // Handle endangered species first
         val endangeredCategories = listOf(
             "extinct",
             "extinct in the wild",
@@ -427,13 +358,17 @@ class FirebaseRepository(private val context: Context) {
             "endangered"
         )
         val category = observation.iucnCategory?.lowercase()
-        val isEndangered = category != null && endangeredCategories.contains(category)
+        if (category in endangeredCategories) {
+            saveEndangeredDataToFirestore(observation, source = "user_verified")
+            Log.d("TrainingData", "⚠️ Skipped trainingData: $scientificName is endangered")
+            return "Observation $observationId confirmed and redirected to EndangeredData"
+        }
 
-        // Determine AI confidence
+        // Determine AI confidence (fallback to 1.0 if not found)
         val confidence = observation.currentIdentification?.confidence ?: 1.0
 
         if (confidence < 0.5) {
-            // 🔸 Low confidence → add to flagQueue for admin verification (KEEP THIS UNCHANGED)
+            // 🔸 Low confidence → add to flagQueue for admin verification
             val flagData = mapOf(
                 "observationId" to observationId,
                 "userId" to userId,
@@ -450,113 +385,28 @@ class FirebaseRepository(private val context: Context) {
                 .await()
 
             Log.d("FlagQueue", "⚠️ Added $scientificName to flagQueue (confidence=$confidence)")
-            Log.d("TrainingData", "⏳ Waiting for admin verification before copying image to storage: $scientificName")
-
-        } else if (confidence >= 0.5 && confidence < 0.8) {
-            // ✅ MEDIUM CONFIDENCE (0.5-0.8) → SAVE TO FIREBASE STORAGE
-            val originalImageUrl = observation.plantImageUrls.firstOrNull()
-
-            if (!originalImageUrl.isNullOrEmpty()) {
-                try {
-                    val sanitizedName = sanitizePlantName(scientificName)
-                    val newImageUrl = copyImageToTrainingStorage(originalImageUrl, sanitizedName)
-
-                    if (!newImageUrl.isNullOrEmpty()) {
-                        // 🚨 ONLY CHANGE: Save to appropriate Firestore collection based on endangered status
-                        if (isEndangered) {
-                            // 🌱 Endangered → Save to EndangeredData collection (Firestore)
-                            saveEndangeredDataFromObservation(observation, source = "user_verified")
-                            Log.d("TrainingData", "🌱 Saved endangered species to EndangeredData: $scientificName")
-                        } else {
-                            // 🌿 Non-endangered → Save to TrainingData collection (Firestore)
-                            val trainingData = TrainingData(
-                                trainingId = UUID.randomUUID().toString(),
-                                plantId = plantId,
-                                imageUrl = newImageUrl, // ✅ Use the COPIED image URL
-                                sourceType = "user_verified",
-                                sourceObservationId = observationId,
-                                verifiedBy = userId,
-                                verificationDate = Timestamp.now(),
-                                verificationMethod = "user_confirmation",
-                                confidenceScore = confidence,
-                                geolocation = observation.geolocation,
-                                isActive = true,
-                                sourceApi = "user_verified"
-                            )
-                            trainingDataCollection.document(trainingData.trainingId)
-                                .set(trainingData, SetOptions.merge())
-                                .await()
-                            Log.d("TrainingData", "✅ Saved to TrainingData: $scientificName")
-                        }
-
-                        // Clean up flag queue
-                        try {
-                            val existingFlagDocId = "${userId}_${observationId}"
-                            flagQueueCollection.document(existingFlagDocId).delete().await()
-                        } catch (e: Exception) {
-                            // It's okay if no flag entry exists
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.e("TrainingData", "❌ Failed to copy image: ${e.message}", e)
-                    // Fallback without copied image
-                    if (isEndangered) {
-                        saveEndangeredDataFromObservation(observation, source = "user_verified")
-                    } else {
-                        val trainingData = TrainingData(
-                            trainingId = UUID.randomUUID().toString(),
-                            plantId = plantId,
-                            imageUrl = originalImageUrl,
-                            sourceType = "user_verified",
-                            sourceObservationId = observationId,
-                            verifiedBy = userId,
-                            verificationDate = Timestamp.now(),
-                            verificationMethod = "user_confirmation",
-                            confidenceScore = confidence,
-                            geolocation = observation.geolocation,
-                            isActive = true,
-                            sourceApi = "user_verified"
-                        )
-                        trainingDataCollection.document(trainingData.trainingId)
-                            .set(trainingData, SetOptions.merge())
-                            .await()
-                    }
-                }
-            }
         } else {
-            // 🚨 HIGH CONFIDENCE (≥ 0.8) → SKIP FIREBASE STORAGE ONLY
-            // But still save to appropriate Firestore collection
-            if (isEndangered) {
-                saveEndangeredDataFromObservation(observation, source = "user_verified")
-                Log.d("TrainingData", "🌱 Saved endangered species to EndangeredData (no storage): $scientificName")
-            } else {
-                val trainingData = TrainingData(
-                    trainingId = UUID.randomUUID().toString(),
-                    plantId = plantId,
-                    imageUrl = observation.plantImageUrls.firstOrNull() ?: "", // Use original URL, don't copy to storage
-                    sourceType = "user_verified",
-                    sourceObservationId = observationId,
-                    verifiedBy = userId,
-                    verificationDate = Timestamp.now(),
-                    verificationMethod = "user_confirmation",
-                    confidenceScore = confidence,
-                    geolocation = observation.geolocation,
-                    isActive = true,
-                    sourceApi = "user_verified"
-                )
-                trainingDataCollection.document(trainingData.trainingId)
-                    .set(trainingData, SetOptions.merge())
-                    .await()
-                Log.d("TrainingData", "✅ Saved to TrainingData (no storage): $scientificName")
-            }
+            // ✅ High confidence → add to trainingData
+            val trainingData = TrainingData(
+                trainingId = UUID.randomUUID().toString(),
+                plantId = plantId,
+                imageUrl = observation.plantImageUrls.firstOrNull() ?: "",
+                sourceType = "user_verified",
+                sourceObservationId = observationId,
+                verifiedBy = userId,
+                verificationDate = Timestamp.now(),
+                verificationMethod = "user_confirmation",
+                confidenceScore = confidence,
+                geolocation = observation.geolocation,
+                isActive = true,
+                sourceApi = "user_verified"
+            )
 
-            // Clean up flag queue
-            try {
-                val existingFlagDocId = "${userId}_${observationId}"
-                flagQueueCollection.document(existingFlagDocId).delete().await()
-            } catch (e: Exception) {
-                // It's okay if no flag entry exists
-            }
+            trainingDataCollection.document(trainingData.trainingId)
+                .set(trainingData, SetOptions.merge())
+                .await()
+
+            Log.d("TrainingData", "✅ Saved high-confidence training data for $scientificName")
         }
 
         updateUserContributionStats(userId, "verifiedIdentifications")
@@ -606,11 +456,12 @@ class FirebaseRepository(private val context: Context) {
         }
     }
 
-    // ✅ Fetch pending observations for admin validation WITH PRIORITIZATION
+    // ✅ Fetch pending observations for admin validation
     suspend fun fetchPendingObservations(limit: Int = 30): List<PlantObservation> {
         return try {
             val snapshot = flagQueueCollection
-                .whereEqualTo("status", "pending")
+                .orderBy("flaggedAt", Query.Direction.ASCENDING)
+                .limit(limit.toLong())
                 .get()
                 .await()
 
@@ -627,39 +478,19 @@ class FirebaseRepository(private val context: Context) {
                 val data = docRef.toObject(Observation::class.java) ?: continue
                 val current = data.currentIdentification
 
-                // 🚨 Get priority and type from flag document
-                val priority = flag.getString("priority") ?: "medium"
-                val isEndangered = flag.getString("type") == "endangered"
-
                 observations.add(
                     PlantObservation(
                         id = observationId,
                         scientificName = current?.scientificName ?: "Unknown",
                         confidence = current?.confidence ?: 0.0,
                         iucnCategory = data.iucnCategory ?: "-",
-                        imageUrls = data.plantImageUrls,
-                        priority = priority, // 🚨 Include priority for sorting
-                        isEndangered = isEndangered // 🚨 Mark if endangered
+                        imageUrls = data.plantImageUrls
                     )
                 )
             }
 
-            // 🚨 MANUAL PRIORITIZATION: Critical first, then endangered, then by confidence
-            observations.sortedWith(compareByDescending<PlantObservation> {
-                // First: Priority level
-                when (it.priority) {
-                    "critical" -> 10
-                    "high" -> 8
-                    "medium" -> 5
-                    "low" -> 2
-                    else -> 1
-                }
-            }.thenByDescending {
-                // Second: Endangered plants get extra priority
-                if (it.isEndangered) 5 else 0
-            }.thenByDescending {
-                // Third: IUCN category severity
-                when (it.iucnCategory?.lowercase()) {
+            observations.sortedByDescending {
+                val priority = when (it.iucnCategory?.lowercase()) {
                     "extinct" -> 9
                     "extinct in the wild" -> 8
                     "critically endangered" -> 7
@@ -671,10 +502,8 @@ class FirebaseRepository(private val context: Context) {
                     "not evaluated" -> 1
                     else -> 0
                 }
-            }.thenBy {
-                // Fourth: Lower confidence = higher priority for review
-                it.confidence
-            })
+                priority + if (it.confidence < 0.5) 1 else 0
+            }
 
         } catch (e: Exception) {
             Log.e("FirebaseRepository", "❌ Error fetching pending observations: ${e.message}", e)
@@ -791,15 +620,26 @@ class FirebaseRepository(private val context: Context) {
                 )
                 val category = observation.iucnCategory?.lowercase()
                 if (category in endangeredCategories) {
-                    saveEndangeredDataFromObservation(observation, source = "admin_verified", adminId = adminId) // ✅ Updated name
+                    // ensure this function exists and accepts Observation
+                    saveEndangeredDataToFirestore(observation, source = "admin_verified", adminId = adminId)
                     Log.d("AdminValidation", "Skipped trainingData: ${observation.currentIdentification?.scientificName} is endangered")
                 } else {
-                    // ✅ KEEP ONLY THIS ONE - it handles both training data and image storage
+                    addToTrainingDataFromAdmin(
+                        observation = observation,
+                        adminId = adminId,
+                        correctedScientificName = correctedScientificName,
+                        correctedCommonName = correctedCommonName
+                    )
                     handleAdminTrainingData(observation, adminId, correctedScientificName, correctedCommonName)
                 }
             } else {
-                // ✅ KEEP ONLY THIS ONE - for corrected identifications
-                handleAdminTrainingData(observation, adminId, correctedScientificName, correctedCommonName)
+                // If admin corrected the identification, you may also wish to add corrected data to training.
+                addToTrainingDataFromAdmin(
+                    observation = observation,
+                    adminId = adminId,
+                    correctedScientificName = correctedScientificName,
+                    correctedCommonName = correctedCommonName
+                )
             }
 
             // 6) Update the flagQueue entry to mark as resolved + attach validator info
@@ -824,15 +664,85 @@ class FirebaseRepository(private val context: Context) {
         }
     }
 
+
+    private suspend fun addToTrainingDataFromAdmin(
+
+        observation: Observation,
+        adminId: String,
+        correctedScientificName: String? = null,
+        correctedCommonName: String? = null
+    ) {
+        val endangeredCategories = listOf(
+            "extinct",
+            "extinct in the wild",
+            "critically endangered",
+            "endangered"
+        )
+        val category = observation.iucnCategory?.lowercase()
+        if (category in endangeredCategories) {
+            saveEndangeredDataToFirestore(observation, source = "admin_verified", adminId = adminId)
+            Log.d("TrainingData", "⚠️ Skipped trainingData: ${observation.currentIdentification?.scientificName} is endangered")
+            return
+        }
+
+        val scientificName = correctedScientificName
+            ?.replace("[^A-Za-z0-9 ]".toRegex(), "_")
+            ?.trim()
+            ?.lowercase()
+            ?: observation.currentIdentification?.scientificName?.lowercase()
+            ?: "unknown"
+
+        val originalImageUrl = observation.plantImageUrls.firstOrNull()
+        if (originalImageUrl.isNullOrEmpty()) {
+            Log.w("TrainingData", "⚠️ No image found for ${observation.observationId}")
+            return
+        }
+
+        try {
+            val sourceRef = FirebaseStorage.getInstance().getReferenceFromUrl(originalImageUrl)
+            val newFileName = "${UUID.randomUUID()}.jpg"
+            val destRef = storage.reference.child("trainingData/$scientificName/$newFileName")
+
+            val bytes = sourceRef.getBytes(5 * 1024 * 1024).await()
+            destRef.putBytes(bytes).await()
+            val newImageUrl = destRef.downloadUrl.await().toString()
+
+            val trainingData = TrainingData(
+                trainingId = UUID.randomUUID().toString(),
+                plantId = observation.observationId,
+                imageUrl = newImageUrl,
+                sourceType = "admin_verified",
+                sourceObservationId = observation.observationId,
+                verifiedBy = adminId,
+                verificationDate = Timestamp.now(),
+                verificationMethod = "manual",
+                confidenceScore = observation.currentIdentification?.confidence ?: 1.0,
+                geolocation = observation.geolocation,
+                isActive = true,
+                sourceApi = "admin_verified",
+                iucnCategory = observation.iucnCategory ?: ""
+            )
+
+            trainingDataCollection.document(trainingData.trainingId)
+                .set(trainingData, SetOptions.merge())
+                .await()
+
+            Log.d("TrainingData", "✅ Added admin-verified training data for $scientificName")
+
+        } catch (e: Exception) {
+            Log.e("TrainingData", "❌ Failed to save admin training data: ${e.message}", e)
+        }
+    }
+
     // ---------- NEW HELPER: copy image to training storage and return new URL ----------
     private suspend fun copyImageToTrainingStorage(originalImageUrl: String, scientificName: String): String? {
         return try {
-            val sourceRef = storage.getReferenceFromUrl(originalImageUrl)
+            val sourceRef = FirebaseStorage.getInstance().getReferenceFromUrl(originalImageUrl)
             val newFileName = "${UUID.randomUUID()}.jpg"
             val folderName = sanitizePlantName(scientificName)
             val destRef = storage.reference.child("trainingData/$folderName/$newFileName")
 
-            val bytes = sourceRef.getBytes(5 * 1024 * 1024).await()
+            val bytes = sourceRef.getBytes(5 * 1024 * 1024).await() // up to 5MB
             destRef.putBytes(bytes).await()
             destRef.downloadUrl.await().toString()
         } catch (e: Exception) {
@@ -849,30 +759,72 @@ class FirebaseRepository(private val context: Context) {
         correctedCommonName: String? = null
     ) {
         try {
-            val scientificName = correctedScientificName ?: observation.currentIdentification?.scientificName ?: "unknown"
-            val sanitizedScientific = sanitizePlantName(scientificName)
+            val scientificName = correctedScientificName
+                ?: observation.currentIdentification?.scientificName
+                ?: "unknown"
+
+            val sanitizedScientific = scientificName
+                .replace("[^A-Za-z0-9 ]".toRegex(), "_")
+                .trim()
+                .lowercase()
+
             val originalImageUrl = observation.plantImageUrls.firstOrNull()
-
             if (originalImageUrl.isNullOrEmpty()) {
-                Log.w("TrainingData", "⚠️ No image found; skipping training upload")
+                Log.w("TrainingData", "⚠️ No image found for ${observation.observationId}; skipping training/endangered upload")
                 return
             }
 
-            val endangeredCategories = listOf("extinct", "extinct in the wild", "critically endangered", "endangered")
+            // endangered categories list
+            val endangeredCategories = listOf(
+                "extinct",
+                "extinct in the wild",
+                "critically endangered",
+                "endangered"
+            )
+
             val obsIucn = observation.iucnCategory?.lowercase()
-            val isEndangered = obsIucn != null && endangeredCategories.contains(obsIucn)
 
-            // 🚨 SKIP ENDANGERED PLANTS - they are handled by saveEndangeredDataFromObservation
-            if (isEndangered) {
-                Log.d("TrainingData", "🌱 Skipping training data - endangered plant handled separately: $scientificName")
+            // If endangered -> copy image to training storage and save metadata to EndangeredData
+            if (obsIucn != null && obsIucn in endangeredCategories) {
+                val newImageUrl = copyImageToTrainingStorage(originalImageUrl, sanitizedScientific)
+
+                val endangeredMap = mutableMapOf<String, Any>(
+                    "observationId" to observation.observationId,
+                    "adminId" to adminId,
+                    "plantId" to (observation.currentIdentification?.plantId ?: ""),
+                    "scientificName" to scientificName,
+                    "commonName" to (correctedCommonName ?: ""),
+                    "iucnCategory" to (observation.iucnCategory ?: ""),
+                    "addedAt" to Timestamp.now(),
+                    "status" to "flagged_endangered",
+                    "sourceApi" to  "admin_verified"
+                )
+
+                if (!newImageUrl.isNullOrEmpty()) endangeredMap["imageUrl"] = newImageUrl
+                if (observation.geolocation != null) {
+                    endangeredMap["geolocation"] = mapOf(
+                        "lat" to observation.geolocation.lat,
+                        "lng" to observation.geolocation.lng
+                    )
+                }
+
+                saveEndangeredDataToFirestore(observation, source = "admin_verified", adminId = adminId)
                 return
             }
 
-            // ✅ ONLY handle non-endangered plants here
-            val newImageUrl = copyImageToTrainingStorage(originalImageUrl, sanitizedScientific)
-            if (newImageUrl.isNullOrEmpty()) return
+            // Not endangered -> only add to trainingData if geolocation exists
+            if (observation.geolocation == null) {
+                Log.d("TrainingData", "ℹ️ Observation ${observation.observationId} has no geo; skipping trainingData upload.")
+                return
+            }
 
-            // ✅ Save to TrainingData collection for non-endangered plants only
+            // copy image into training storage and save metadata to trainingData (Firestore)
+            val newImageUrl = copyImageToTrainingStorage(originalImageUrl, sanitizedScientific)
+            if (newImageUrl.isNullOrEmpty()) {
+                Log.w("TrainingData", "⚠️ Image copy failed for ${observation.observationId}; skipping Firestore training entry")
+                return
+            }
+
             val training = TrainingData(
                 trainingId = UUID.randomUUID().toString(),
                 plantId = observation.currentIdentification?.plantId ?: observation.observationId,
@@ -883,105 +835,97 @@ class FirebaseRepository(private val context: Context) {
                 verificationDate = Timestamp.now(),
                 verificationMethod = "manual",
                 confidenceScore = observation.currentIdentification?.confidence ?: 1.0,
+                geolocation = observation.geolocation,
                 isActive = true,
                 sourceApi = "admin_verified",
-                iucnCategory = observation.iucnCategory ?: "",
-                geolocation = observation.geolocation
+                iucnCategory = observation.iucnCategory ?: ""
             )
-            saveTrainingDataToFirestore(training)
-            Log.d("TrainingData", "✅ Saved training data for $scientificName")
 
+            // Optionally set isEndangered flag if you added that field
+            // val updatedTraining = training.copy(isEndangered = false)
+
+            saveTrainingDataToFirestore(training)
         } catch (e: Exception) {
             Log.e("TrainingData", "❌ handleAdminTrainingData failed: ${e.message}", e)
         }
     }
 
-
-    // Example helper function to save EndangeredData
-    private suspend fun saveEndangeredDataFromObservation(
-        observation: Observation,
-        source: String,
-        adminId: String? = null
-    ) {
-        try {
-            val endangeredCategories = listOf(
-                "extinct", "extinct in the wild", "critically endangered", "endangered"
-            )
-
-            val category = observation.iucnCategory?.lowercase()
-            if (category !in endangeredCategories) return // not endangered
-
-            val scientificName = observation.currentIdentification?.scientificName ?: "unknown"
-            val sanitizedScientific = sanitizePlantName(scientificName)
-            val originalImageUrl = observation.plantImageUrls.firstOrNull()
-
-            if (originalImageUrl.isNullOrEmpty()) {
-                Log.w("EndangeredData", "⚠️ No image found for endangered plant $scientificName")
-                return
-            }
-
-            // ✅ COPY IMAGE TO TRAINING STORAGE FIRST
-            val newImageUrl = copyImageToTrainingStorage(originalImageUrl, sanitizedScientific)
-            if (newImageUrl.isNullOrEmpty()) {
-                Log.e("EndangeredData", "❌ Failed to copy image for endangered plant $scientificName")
-                return
-            }
-
-            // ✅ Create proper EndangeredData object with the COPIED image URL
-            val endangeredData = EndangeredData(
-                id = "endangered_${observation.observationId}",
-                observationId = observation.observationId,
-                plantId = observation.currentIdentification?.plantId ?: "",
-                scientificName = scientificName,
-                commonName = observation.currentIdentification?.commonName ?: "",
-                imageUrl = newImageUrl, // ✅ Use the COPIED image URL
-                geolocation = observation.geolocation,
-                iucnCategory = observation.iucnCategory ?: "unknown",
-                addedBy = adminId ?: "system",
-                addedAt = Timestamp.now(),
-                notes = "Added via $source"
-            )
-
-            // ✅ Save using the proper EndangeredData object
-            saveEndangeredDataToFirestore(endangeredData)
-
-            Log.d("EndangeredData", "✅ Saved endangered data with image for ${observation.observationId}")
-
-        } catch (e: Exception) {
-            Log.e("EndangeredData", "❌ Failed to save endangered metadata: ${e.message}", e)
-        }
-    }
-
-    // Add this function back - it's needed for saving EndangeredData objects
-    private suspend fun saveEndangeredDataToFirestore(endangeredData: EndangeredData) {
-        try {
-            endangeredDataCollection.document(endangeredData.id)
-                .set(endangeredData, SetOptions.merge())
-                .await()
-            Log.d("EndangeredData", "✅ Saved endangered data for ${endangeredData.plantId}")
-        } catch (e: Exception) {
-            Log.e("EndangeredData", "❌ Failed saving endangered data to Firestore: ${e.message}", e)
-        }
-    }
-
     private suspend fun saveTrainingDataToFirestore(trainingData: TrainingData) {
         try {
+            // ✅ enforce: skip training data without geolocation
             if (trainingData.geolocation == null) {
-                Log.w("TrainingData", "Skipped saving trainingData ${trainingData.trainingId} - missing geolocation")
+                Log.w("TrainingData", "Skipped saving trainingData for ${trainingData.trainingId} - missing geolocation")
                 return
             }
 
             trainingDataCollection.document(trainingData.trainingId)
                 .set(trainingData, SetOptions.merge())
                 .await()
-
-            Log.d("TrainingData", "✅ Saved training data for ${trainingData.plantId}")
-
+            Log.d("TrainingData", "✅ Saved training data (Firestore) for ${trainingData.plantId}")
         } catch (e: Exception) {
             Log.e("TrainingData", "❌ Failed saving training data to Firestore: ${e.message}", e)
         }
     }
 
+// Now accepts an optional adminId for admin-sourced entries.
+    private suspend fun saveEndangeredDataToFirestore(
+        observation: Observation,
+        source: String,
+        adminId: String? = null
+    ) {
+        try {
+            val endangeredCategories = listOf(
+                "extinct",
+                "extinct in the wild",
+                "critically endangered",
+                "endangered"
+            )
+
+            val category = observation.iucnCategory?.lowercase()
+            if (category !in endangeredCategories) return // not endangered
+
+            // Use a stable doc id per observation to avoid duplicates
+            val docId = "endangered_${observation.observationId}"
+            val data = mutableMapOf<String, Any>(
+                "observationId" to observation.observationId,
+                "plantId" to (observation.currentIdentification?.plantId ?: ""),
+                "scientificName" to (observation.currentIdentification?.scientificName ?: ""),
+                "iucnCategory" to (observation.iucnCategory ?: "unknown"),
+                "addedAt" to Timestamp.now(),
+                "status" to "flagged_endangered",
+                "source" to source
+            )
+
+            // attach adminId if provided
+            adminId?.let { data["addedBy"] = it }
+
+            // add geo if present
+            observation.geolocation?.let {
+                data["geolocation"] = mapOf("lat" to it.lat, "lng" to it.lng)
+            }
+
+            // add image if present
+            observation.plantImageUrls.firstOrNull()?.let {
+                data["imageUrl"] = it
+            }
+
+            db.collection("EndangeredData").document(docId)
+                .set(data, SetOptions.merge())
+                .await()
+
+            Log.d("EndangeredData", "✅ Saved endangered metadata for ${observation.observationId}")
+
+        } catch (e: Exception) {
+            Log.e("EndangeredData", "❌ Failed to save endangered metadata: ${e.message}", e)
+        }
+
+        Log.i("EndangeredRedirect", "🌱 Redirected ${observation.currentIdentification?.scientificName} → EndangeredData")
+    }
+
+
+    /**
+     * Fetches all documents from the `trainingData` collection for map display.
+     */
     suspend fun getTrainingDataForMap(): List<TrainingData> {
         return try {
             Log.d("FirebaseRepo-Map", "Fetching training data for map...")
@@ -1012,7 +956,7 @@ class FirebaseRepository(private val context: Context) {
     }
 
     private fun sanitizePlantName(name: String): String {
-        return name.trim().lowercase().replace("[^a-z0-9]".toRegex(), " ")
+        return name.trim().lowercase().replace("[^a-z0-9]".toRegex(), "_")
     }
 
 }

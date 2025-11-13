@@ -8,12 +8,13 @@ data class Observation(
     val userId: String = "",
     val plantImageUrls: List<String> = emptyList(),
     val geolocation: GeoLocation? = null,
-    val userNote: String = "", // Now encrypted
-    val locationName: String? = null, // Generalized location
+    val userNote: String = "",
+
+    val locationName: String? = null,
 
     // Multiple AI Sources
     val aiSuggestions: List<AISuggestion> = emptyList(),
-    val primarySource: String = "plantnet",
+    val primarySource: String = "plantnet", // "plantnet", "smartplant_ai", "hybrid"
 
     // Current Identification State
     val currentIdentification: CurrentIdentification = CurrentIdentification(),
@@ -21,9 +22,8 @@ data class Observation(
     // Flagging System
     val flagInfo: FlagInfo? = null,
 
-    // 🆕 ENCRYPTED FIELDS
-    val iucnCategory: String? = null, // Public version (generalized)
-    val encryptedIUCN: String? = null, // Encrypted exact IUCN
+    // 🆕 IUCN Category (e.g., "Endangered", "Vulnerable", etc.)
+    val iucnCategory: String? = null,
 
     // Metadata
     @ServerTimestamp

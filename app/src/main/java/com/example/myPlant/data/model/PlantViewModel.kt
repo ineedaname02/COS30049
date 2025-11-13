@@ -1,7 +1,7 @@
 package com.example.myPlant.data.model
 
 import androidx.lifecycle.*
-import android.util.Log
+
 import com.example.myPlant.data.repository.PlantRepository
 import com.example.myPlant.data.repository.FirebaseRepository
 import kotlinx.coroutines.launch
@@ -32,14 +32,7 @@ class PlantViewModel(
     private val _allObservations = MutableLiveData<List<Observation>>()
     val allObservations: LiveData<List<Observation>> = _allObservations
 
-    // ✅ FIXED: Proper user observations LiveData
-    private val _userObservations = MutableLiveData<List<Observation>>()
-    val userObservations: LiveData<List<Observation>> = _userObservations
-
     var localPredictions: List<ClassificationResult>? = null
-
-    private val _iucnStatus = MutableLiveData<String?>()
-    val iucnStatus: LiveData<String?> = _iucnStatus
 
     fun identifyPlant(
         images: List<MultipartBody.Part>,
@@ -51,7 +44,7 @@ class PlantViewModel(
                 _isLoading.value = true
                 _loadingMessage.value = "Analyzing plant images..."
 
-                val response = plantRepository.identifyPlant(images, organs, project)
+                val response = plantRepository.identifyPlant(images, organs, project) //repository
 
                 if (response.isSuccessful) {
                     _loadingMessage.value = "Processing results..."
@@ -68,11 +61,14 @@ class PlantViewModel(
         }
     }
 
+    private val _iucnStatus = MutableLiveData<String?>()
+    val iucnStatus: LiveData<String?> = _iucnStatus
+
     fun fetchIucnStatus(scientificName: String) {
         viewModelScope.launch {
             try {
                 _loadingMessage.value = "Fetching conservation status..."
-                val status = plantRepository.getIucnStatus(scientificName)
+                val status = plantRepository.getIucnStatus(scientificName) //repository
                 _iucnStatus.value = status
             } catch (e: Exception) {
                 _error.value = "Failed to fetch IUCN status: ${e.message}"
@@ -87,6 +83,7 @@ class PlantViewModel(
             _isLoading.value = true
             _loadingMessage.value = "Fetching all plant locations..."
             try {
+                // ✅ Directly and safely use the firebaseRepository
                 val observations = firebaseRepository.getAllObservations()
                 _allObservations.value = observations
             } catch (e: Exception) {
@@ -98,7 +95,9 @@ class PlantViewModel(
         }
     }
 
-    // ✅ FIXED: Proper user observations loading
+    // ✅ ADD THIS FOR THE USER'S HISTORY MAP
+    private val _userObservations = MutableLiveData<List<Observation>>()
+    val userObservations: LiveData<List<Observation>> = _userObservations
     fun loadUserObservations() {
         val userId = FirebaseAuth.getInstance().currentUser?.uid
         if (userId == null) {
@@ -110,15 +109,8 @@ class PlantViewModel(
             _isLoading.value = true
             _loadingMessage.value = "Fetching your observations..."
             try {
-                // Use the decrypted version if available, otherwise fallback to regular
-                val observations = try {
-                    // Try to use decrypted observations first
-                    firebaseRepository.getDecryptedUserObservations(userId)
-                } catch (e: Exception) {
-                    // Fallback to regular observations if decrypted method doesn't exist yet
-                    Log.w("PlantViewModel", "Using fallback observations: ${e.message}")
-                    firebaseRepository.getUserObservations(userId)
-                }
+                // This calls the new function we will add to the repository
+                val observations = firebaseRepository.getUserObservations(userId)
                 _userObservations.value = observations
             } catch (e: Exception) {
                 _error.value = "Error fetching your observations: ${e.message}"
@@ -128,4 +120,5 @@ class PlantViewModel(
             }
         }
     }
+
 }
