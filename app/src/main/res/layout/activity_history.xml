@@ -7,16 +7,6 @@
     android:background="@color/background_light"
     android:orientation="vertical">
 
-    <TextView
-        android:id="@+id/tvHistoryTitle"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Plant History"
-        android:textSize="22sp"
-        android:textStyle="bold"
-        android:textColor="@color/text_primary"
-        android:padding="12dp" />
-
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/historyRecycler"
         android:layout_width="match_parent"

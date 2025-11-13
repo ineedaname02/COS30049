@@ -2,82 +2,99 @@ package com.example.myPlant.ui
 
 import android.content.Intent
 import android.os.Bundle
-import android.widget.Button
-import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.example.myPlant.R
+import com.github.mikephil.charting.charts.LineChart
+import com.github.mikephil.charting.components.XAxis
+import com.github.mikephil.charting.data.Entry
+import com.github.mikephil.charting.data.LineData
+import com.github.mikephil.charting.data.LineDataSet
 import com.google.android.material.appbar.MaterialToolbar
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.Query
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.textview.MaterialTextView
 
 class IotDashboardActivity : AppCompatActivity() {
 
-    private lateinit var db: FirebaseFirestore
-    private lateinit var tvSensorReading: TextView
-    private lateinit var btnViewHistory: Button
-    private lateinit var btnRefreshData: Button
+    private lateinit var topAppBar: MaterialToolbar
+    private lateinit var tvSensorReading: MaterialTextView
+    private lateinit var btnRefreshData: MaterialButton
+    private lateinit var btnViewHistory: MaterialButton
+
+    private lateinit var lineChartTemp: LineChart
+    private lateinit var lineChartHumidity: LineChart
+    private lateinit var lineChartMoisture: LineChart
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_iot_dashboard)
 
-        val toolbar: MaterialToolbar = findViewById(R.id.toolbar)
-        setSupportActionBar(toolbar)
-        supportActionBar?.setDisplayHomeAsUpEnabled(true)
-        supportActionBar?.setDisplayShowHomeEnabled(true)
-
-        db = FirebaseFirestore.getInstance()
-
+        // Initialize views
+        topAppBar = findViewById(R.id.topAppBar)
         tvSensorReading = findViewById(R.id.tvSensorReading)
-        btnViewHistory = findViewById(R.id.btnViewHistory)
         btnRefreshData = findViewById(R.id.btnRefreshData)
+        btnViewHistory = findViewById(R.id.btnViewHistory)
+        lineChartTemp = findViewById(R.id.lineChartTemp)
+        lineChartHumidity = findViewById(R.id.lineChartHumidity)
+        lineChartMoisture = findViewById(R.id.lineChartMoisture)
 
-        loadLatestReading()
+        // Handle toolbar back navigation
+        topAppBar.setNavigationOnClickListener {
+            onBackPressedDispatcher.onBackPressed()
+        }
+
+        setupChart(lineChartTemp, "Temperature (°C)")
+        setupChart(lineChartHumidity, "Humidity (%)")
+        setupChart(lineChartMoisture, "Soil Moisture (%)")
+
+        updateAllCharts()
+
+        btnRefreshData.setOnClickListener { updateAllCharts() }
 
         btnViewHistory.setOnClickListener {
-            startActivity(Intent(this, HistoryActivity::class.java))
-        }
-
-        btnRefreshData.setOnClickListener {
-            loadLatestReading()
+            val intent = Intent(this, IotHistoryActivity::class.java)
+            startActivity(intent)
         }
     }
 
-    override fun onSupportNavigateUp(): Boolean {
-        onBackPressed()
-        return true
+    private fun setupChart(chart: LineChart, label: String) {
+        chart.apply {
+            description.isEnabled = false
+            setTouchEnabled(true)
+            setPinchZoom(true)
+            xAxis.position = XAxis.XAxisPosition.BOTTOM
+            axisRight.isEnabled = false
+            legend.isEnabled = true
+            animateX(1000)
+        }
     }
 
-    private fun loadLatestReading() {
-        db.collection("readings")
-            .orderBy("timestamp", Query.Direction.DESCENDING)
-            .limit(1)
-            .get()
-            .addOnSuccessListener { snapshot ->
-                if (!snapshot.isEmpty) {
-                    val doc = snapshot.documents[0]
+    private fun updateAllCharts() {
+        val tempValues = listOf(29f, 30f, 32f, 31f)
+        val humidityValues = listOf(55f, 58f, 60f, 57f)
+        val moistureValues = listOf(62f, 60f, 65f, 63f)
 
-                    val temp = doc.getDouble("temperature") ?: 0.0
-                    val humidity = doc.getDouble("humidity") ?: 0.0
-                    val moisture = doc.getDouble("moisture") ?: 0.0
-                    val rain = doc.getLong("rain") ?: 0
-                    val sound = doc.getLong("sound") ?: 0
-                    val timestamp = doc.getString("timestamp") ?: "--"
+        setChartData(lineChartTemp, tempValues, "Temperature (°C)", R.color.warning_orange)
+        setChartData(lineChartHumidity, humidityValues, "Humidity (%)", R.color.accent_blue)
+        setChartData(lineChartMoisture, moistureValues, "Soil Moisture (%)", R.color.primary_green)
 
-                    tvSensorReading.text = """
-                        Temperature: $temp °C
-                        Humidity: $humidity %
-                        Moisture: $moisture
-                        Rain: $rain
-                        Sound: $sound
-                        Updated: $timestamp
-                    """.trimIndent()
-                } else {
-                    tvSensorReading.text = "No data available"
-                }
-            }
-            .addOnFailureListener {
-                tvSensorReading.text = "Error loading data"
-            }
+        tvSensorReading.text = "Temp: ${tempValues.last().toInt()}°C | " +
+                "Humidity: ${humidityValues.last().toInt()}% | " +
+                "Moisture: ${moistureValues.last().toInt()}%"
+    }
+
+    private fun setChartData(chart: LineChart, values: List<Float>, label: String, colorRes: Int) {
+        val entries = values.mapIndexed { index, value -> Entry(index.toFloat(), value) }
+        val dataSet = LineDataSet(entries, label).apply {
+            color = getColor(colorRes)
+            valueTextColor = getColor(R.color.black)
+            lineWidth = 2f
+            circleRadius = 4f
+            setCircleColor(getColor(colorRes))
+            setDrawValues(false)
+            mode = LineDataSet.Mode.CUBIC_BEZIER
+        }
+
+        chart.data = LineData(dataSet)
+        chart.invalidate()
     }
 }

@@ -6,13 +6,16 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.myPlant.databinding.ActivityHistoryBinding
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import com.example.myPlant.ui.iot.IotReading
+import com.example.myPlant.ui.iot.IotHistoryAdapter
 
-class HistoryActivity : AppCompatActivity() {
+
+class IotHistoryActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityHistoryBinding
     private val db = FirebaseFirestore.getInstance()
     private val historyList = mutableListOf<IotReading>()
-    private val adapter = HistoryAdapter(historyList)
+    private val adapter = IotHistoryAdapter(historyList)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
