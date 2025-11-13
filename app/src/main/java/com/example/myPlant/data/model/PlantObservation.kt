@@ -12,11 +12,11 @@ data class PlantObservation(
     val iucnCategory: String? = null,
     val imageUrls: List<String> = emptyList(),
     val location: String? = null,
-
-    // new/optional fields used for verification flow:
-    val flagged: Boolean = false,           // set by the user if they mark wrong/correct
-    val flaggedByUserId: String? = null,    // optional
-    val processed: Boolean = false,         // set true after moved/handled
+    val priority: String = "medium",
+    val isEndangered: Boolean = false,
+    val flagged: Boolean = false,
+    val flaggedByUserId: String? = null,
+    val processed: Boolean = false,
     val processedAt: Timestamp? = null,
     val processedByAdminId: String? = null
 )

@@ -43,9 +43,9 @@ class PlantViewModel(
             try {
                 _isLoading.value = true
                 _loadingMessage.value = "Analyzing plant images..."
-                
+
                 val response = plantRepository.identifyPlant(images, organs, project) //repository
-                
+
                 if (response.isSuccessful) {
                     _loadingMessage.value = "Processing results..."
                     _result.value = response.body()
