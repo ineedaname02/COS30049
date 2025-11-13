@@ -4,7 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:background="@color/white">
+    android:paddingTop="24dp">
 
     <com.google.android.material.appbar.MaterialToolbar
         android:id="@+id/topAppBar"
@@ -14,7 +14,7 @@
         app:title="IoT Dashboard"
         app:titleCentered="true"
         app:titleTextColor="@android:color/white"
-        android:elevation="4dp" />
+        android:elevation="5dp" />
 
 
     <androidx.core.widget.NestedScrollView
