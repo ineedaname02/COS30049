@@ -419,7 +419,7 @@ class FirebaseRepository(private val context: Context) {
             )
         ).await()
 
-        // Handle endangered species first (KEEP THIS UNCHANGED)
+        // Handle endangered species first (KEEP THIS UNCHANGED for Firestore)
         val endangeredCategories = listOf(
             "extinct",
             "extinct in the wild",
@@ -427,13 +427,9 @@ class FirebaseRepository(private val context: Context) {
             "endangered"
         )
         val category = observation.iucnCategory?.lowercase()
-        if (category in endangeredCategories) {
-            saveEndangeredDataFromObservation(observation, source = "user_verified")
-            Log.d("TrainingData", "⚠️ Skipped trainingData: $scientificName is endangered")
-            return "Observation $observationId confirmed and redirected to EndangeredData"
-        }
+        val isEndangered = category != null && endangeredCategories.contains(category)
 
-        // Determine AI confidence (KEEP THIS UNCHANGED)
+        // Determine AI confidence
         val confidence = observation.currentIdentification?.confidence ?: 1.0
 
         if (confidence < 0.5) {
@@ -454,12 +450,10 @@ class FirebaseRepository(private val context: Context) {
                 .await()
 
             Log.d("FlagQueue", "⚠️ Added $scientificName to flagQueue (confidence=$confidence)")
-
-            // 🚨 DON'T copy image to storage yet - wait for admin verification
             Log.d("TrainingData", "⏳ Waiting for admin verification before copying image to storage: $scientificName")
 
-        } else {
-            // ✅ High confidence (≥ 0.5) user confirmed → add to trainingData AND copy to storage
+        } else if (confidence >= 0.5 && confidence < 0.8) {
+            // ✅ MEDIUM CONFIDENCE (0.5-0.8) → SAVE TO FIREBASE STORAGE
             val originalImageUrl = observation.plantImageUrls.firstOrNull()
 
             if (!originalImageUrl.isNullOrEmpty()) {
@@ -468,10 +462,51 @@ class FirebaseRepository(private val context: Context) {
                     val newImageUrl = copyImageToTrainingStorage(originalImageUrl, sanitizedName)
 
                     if (!newImageUrl.isNullOrEmpty()) {
+                        // 🚨 ONLY CHANGE: Save to appropriate Firestore collection based on endangered status
+                        if (isEndangered) {
+                            // 🌱 Endangered → Save to EndangeredData collection (Firestore)
+                            saveEndangeredDataFromObservation(observation, source = "user_verified")
+                            Log.d("TrainingData", "🌱 Saved endangered species to EndangeredData: $scientificName")
+                        } else {
+                            // 🌿 Non-endangered → Save to TrainingData collection (Firestore)
+                            val trainingData = TrainingData(
+                                trainingId = UUID.randomUUID().toString(),
+                                plantId = plantId,
+                                imageUrl = newImageUrl, // ✅ Use the COPIED image URL
+                                sourceType = "user_verified",
+                                sourceObservationId = observationId,
+                                verifiedBy = userId,
+                                verificationDate = Timestamp.now(),
+                                verificationMethod = "user_confirmation",
+                                confidenceScore = confidence,
+                                geolocation = observation.geolocation,
+                                isActive = true,
+                                sourceApi = "user_verified"
+                            )
+                            trainingDataCollection.document(trainingData.trainingId)
+                                .set(trainingData, SetOptions.merge())
+                                .await()
+                            Log.d("TrainingData", "✅ Saved to TrainingData: $scientificName")
+                        }
+
+                        // Clean up flag queue
+                        try {
+                            val existingFlagDocId = "${userId}_${observationId}"
+                            flagQueueCollection.document(existingFlagDocId).delete().await()
+                        } catch (e: Exception) {
+                            // It's okay if no flag entry exists
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("TrainingData", "❌ Failed to copy image: ${e.message}", e)
+                    // Fallback without copied image
+                    if (isEndangered) {
+                        saveEndangeredDataFromObservation(observation, source = "user_verified")
+                    } else {
                         val trainingData = TrainingData(
                             trainingId = UUID.randomUUID().toString(),
                             plantId = plantId,
-                            imageUrl = newImageUrl, // ✅ Use the COPIED image URL
+                            imageUrl = originalImageUrl,
                             sourceType = "user_verified",
                             sourceObservationId = observationId,
                             verifiedBy = userId,
@@ -482,35 +517,45 @@ class FirebaseRepository(private val context: Context) {
                             isActive = true,
                             sourceApi = "user_verified"
                         )
-
                         trainingDataCollection.document(trainingData.trainingId)
                             .set(trainingData, SetOptions.merge())
                             .await()
-
-                        Log.d("TrainingData", "✅ Saved high-confidence user-confirmed training data to Firestore AND Storage for $scientificName")
                     }
-                } catch (e: Exception) {
-                    Log.e("TrainingData", "❌ Failed to copy image for user-confirmed observation: ${e.message}", e)
-
-                    // Fallback: Save without copied image
-                    val trainingData = TrainingData(
-                        trainingId = UUID.randomUUID().toString(),
-                        plantId = plantId,
-                        imageUrl = originalImageUrl,
-                        sourceType = "user_verified",
-                        sourceObservationId = observationId,
-                        verifiedBy = userId,
-                        verificationDate = Timestamp.now(),
-                        verificationMethod = "user_confirmation",
-                        confidenceScore = confidence,
-                        geolocation = observation.geolocation,
-                        isActive = true,
-                        sourceApi = "user_verified"
-                    )
-                    trainingDataCollection.document(trainingData.trainingId)
-                        .set(trainingData, SetOptions.merge())
-                        .await()
                 }
+            }
+        } else {
+            // 🚨 HIGH CONFIDENCE (≥ 0.8) → SKIP FIREBASE STORAGE ONLY
+            // But still save to appropriate Firestore collection
+            if (isEndangered) {
+                saveEndangeredDataFromObservation(observation, source = "user_verified")
+                Log.d("TrainingData", "🌱 Saved endangered species to EndangeredData (no storage): $scientificName")
+            } else {
+                val trainingData = TrainingData(
+                    trainingId = UUID.randomUUID().toString(),
+                    plantId = plantId,
+                    imageUrl = observation.plantImageUrls.firstOrNull() ?: "", // Use original URL, don't copy to storage
+                    sourceType = "user_verified",
+                    sourceObservationId = observationId,
+                    verifiedBy = userId,
+                    verificationDate = Timestamp.now(),
+                    verificationMethod = "user_confirmation",
+                    confidenceScore = confidence,
+                    geolocation = observation.geolocation,
+                    isActive = true,
+                    sourceApi = "user_verified"
+                )
+                trainingDataCollection.document(trainingData.trainingId)
+                    .set(trainingData, SetOptions.merge())
+                    .await()
+                Log.d("TrainingData", "✅ Saved to TrainingData (no storage): $scientificName")
+            }
+
+            // Clean up flag queue
+            try {
+                val existingFlagDocId = "${userId}_${observationId}"
+                flagQueueCollection.document(existingFlagDocId).delete().await()
+            } catch (e: Exception) {
+                // It's okay if no flag entry exists
             }
         }
 
