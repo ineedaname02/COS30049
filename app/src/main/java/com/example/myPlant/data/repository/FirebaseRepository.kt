@@ -14,6 +14,7 @@ import kotlinx.coroutines.tasks.await
 import java.util.UUID
 import com.google.firebase.firestore.Query
 import kotlinx.coroutines.tasks.await
+import com.example.myPlant.data.encryption.EncryptionUtils
 
 class FirebaseRepository(private val context: Context) {
 
@@ -240,7 +241,7 @@ class FirebaseRepository(private val context: Context) {
             )
             val category = observation.iucnCategory?.lowercase()
             if (category in endangeredCategories) {
-                saveEndangeredDataToFirestore(observation, source = "ai_auto_confident")
+                saveEndangeredDataFromObservation(observation, source = "ai_auto_confident")
                 Log.d("TrainingData", "⚠️ Skipped trainingData: $scientificName is endangered")
                 return
             }
@@ -714,7 +715,7 @@ class FirebaseRepository(private val context: Context) {
                 val category = observation.iucnCategory?.lowercase()
                 if (category in endangeredCategories) {
                     // ensure this function exists and accepts Observation
-                    saveEndangeredDataToFirestore(observation, source = "admin_verified", adminId = adminId)
+                    saveEndangeredDataFromObservation(observation, source = "ai_auto_confident")
                     Log.d("AdminValidation", "Skipped trainingData: ${observation.currentIdentification?.scientificName} is endangered")
                 } else {
                     addToTrainingDataFromAdmin(
@@ -773,7 +774,7 @@ class FirebaseRepository(private val context: Context) {
         )
         val category = observation.iucnCategory?.lowercase()
         if (category in endangeredCategories) {
-            saveEndangeredDataToFirestore(observation, source = "admin_verified", adminId = adminId)
+            saveEndangeredDataFromObservation(observation, source = "ai_auto_confident")
             Log.d("TrainingData", "⚠️ Skipped trainingData: ${observation.currentIdentification?.scientificName} is endangered")
             return
         }
@@ -901,7 +902,7 @@ class FirebaseRepository(private val context: Context) {
                     )
                 }
 
-                saveEndangeredDataToFirestore(observation, source = "admin_verified", adminId = adminId)
+                saveEndangeredDataFromObservation(observation, source = "ai_auto_confident")
                 return
             }
 
@@ -961,59 +962,6 @@ class FirebaseRepository(private val context: Context) {
     }
 
     //TODO Endangered data need encryption
-    private suspend fun saveEndangeredDataToFirestore(
-        observation: Observation,
-        source: String,
-        adminId: String? = null
-    ) {
-        try {
-            val endangeredCategories = listOf(
-                "extinct",
-                "extinct in the wild",
-                "critically endangered",
-                "endangered"
-            )
-
-            val category = observation.iucnCategory?.lowercase()
-            if (category !in endangeredCategories) return // not endangered
-
-            // Use a stable doc id per observation to avoid duplicates
-            val docId = "endangered_${observation.observationId}"
-            val data = mutableMapOf<String, Any>(
-                "observationId" to observation.observationId,
-                "plantId" to (observation.currentIdentification?.plantId ?: ""),
-                "scientificName" to (observation.currentIdentification?.scientificName ?: ""),
-                "iucnCategory" to (observation.iucnCategory ?: "unknown"),
-                "addedAt" to Timestamp.now(),
-                "status" to "flagged_endangered",
-                "source" to source
-            )
-
-            // attach adminId if provided
-            adminId?.let { data["addedBy"] = it }
-
-            // add geo if present
-            observation.geolocation?.let {
-                data["geolocation"] = mapOf("lat" to it.lat, "lng" to it.lng)
-            }
-
-            // add image if present
-            observation.plantImageUrls.firstOrNull()?.let {
-                data["imageUrl"] = it
-            }
-
-            db.collection("EndangeredData").document(docId)
-                .set(data, SetOptions.merge())
-                .await()
-
-            Log.d("EndangeredData", "✅ Saved endangered metadata for ${observation.observationId}")
-
-        } catch (e: Exception) {
-            Log.e("EndangeredData", "❌ Failed to save endangered metadata: ${e.message}", e)
-        }
-
-        Log.i("EndangeredRedirect", "🌱 Redirected ${observation.currentIdentification?.scientificName} → EndangeredData")
-    }
 
 
     /**
@@ -1096,13 +1044,29 @@ class FirebaseRepository(private val context: Context) {
         return "Observation flagged as incorrect and sent for admin review"
     }
 
-    //TODO Endangered data need encryption
+    private suspend fun canAccessEncryptedData(): Boolean {
+        return try {
+            EncryptionUtils.getEncryptionKey()
+            true
+        } catch (e: Exception) {
+            Log.e("EndangeredData", "❌ User cannot access encrypted data: ${e.message}")
+            false
+        }
+    }
+
+    // ✅ KEEP THIS ONE - Main function to save from observation
     private suspend fun saveEndangeredDataFromObservation(
         observation: Observation,
         source: String,
         adminId: String? = null
     ) {
         try {
+            // 🔐 ADD THIS CHECK FIRST
+            if (!canAccessEncryptedData()) {
+                Log.e("EndangeredData", "❌ Admin access required for encryption")
+                return
+            }
+
             val endangeredCategories = listOf(
                 "extinct", "extinct in the wild", "critically endangered", "endangered"
             )
@@ -1133,33 +1097,57 @@ class FirebaseRepository(private val context: Context) {
                 plantId = observation.currentIdentification?.plantId ?: "",
                 scientificName = scientificName,
                 commonName = observation.currentIdentification?.commonName ?: "",
-                imageUrl = newImageUrl, // ✅ Use the COPIED image URL
-                geolocation = observation.geolocation,
+                imageUrl = newImageUrl,
+                geolocation = observation.geolocation, // This should match your GeoLocation class
                 iucnCategory = observation.iucnCategory ?: "unknown",
                 addedBy = adminId ?: "system",
                 addedAt = Timestamp.now(),
                 notes = "Added via $source"
             )
 
-            // ✅ Save using the proper EndangeredData object
+            // ✅ Save using the proper EndangeredData object (this will now encrypt)
             saveEndangeredDataToFirestore(endangeredData)
 
-            Log.d("EndangeredData", "✅ Saved endangered data with image for ${observation.observationId}")
+            Log.d("EndangeredData", "✅ Saved ENCRYPTED endangered data for ${observation.observationId}")
 
         } catch (e: Exception) {
             Log.e("EndangeredData", "❌ Failed to save endangered metadata: ${e.message}", e)
         }
     }
 
-    //TODO Endangered data need encryption
+    // ✅ KEEP THIS ONE - Helper function that does the actual encryption + save
     private suspend fun saveEndangeredDataToFirestore(endangeredData: EndangeredData) {
         try {
-            endangeredDataCollection.document(endangeredData.id)
-                .set(endangeredData, SetOptions.merge())
+            Log.d("EncryptionDebug", "🔐 Starting encryption for: ${endangeredData.scientificName}")
+
+            // 🔐 Convert to encrypted data
+            val encryptedData = EncryptedEndangeredData.fromEndangeredData(endangeredData)
+
+            Log.d("EncryptionDebug", "✅ Encrypted data created:")
+            Log.d("EncryptionDebug", "   Original scientificName: ${endangeredData.scientificName}")
+            Log.d("EncryptionDebug", "   Encrypted scientificName: ${encryptedData.encryptedScientificName}")
+            Log.d("EncryptionDebug", "   Is encrypted field empty? ${encryptedData.encryptedScientificName.isEmpty()}")
+
+            endangeredDataCollection.document(encryptedData.id)
+                .set(encryptedData, SetOptions.merge())
                 .await()
-            Log.d("EndangeredData", "✅ Saved endangered data for ${endangeredData.plantId}")
+
+            Log.d("EncryptionDebug", "✅ Successfully saved ENCRYPTED data to Firestore")
+
         } catch (e: Exception) {
-            Log.e("EndangeredData", "❌ Failed saving endangered data to Firestore: ${e.message}", e)
+            Log.e("EncryptionDebug", "❌ Encryption/Save failed: ${e.message}", e)
+        }
+    }
+
+    // ✅ KEEP THIS ONE - For reading encrypted data
+    suspend fun getEndangeredDataById(id: String): EndangeredData? {
+        try {
+            val document = endangeredDataCollection.document(id).get().await()
+            val encryptedData = document.toObject(EncryptedEndangeredData::class.java)
+            return encryptedData?.toEndangeredData()
+        } catch (e: Exception) {
+            Log.e("EndangeredData", "❌ Failed to read encrypted data: ${e.message}", e)
+            return null
         }
     }
 

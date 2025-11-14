@@ -12,6 +12,6 @@ data class EndangeredData(
     val geolocation: GeoLocation? = null,
     val iucnCategory: String = "",
     val addedBy: String = "",
-    val addedAt: Timestamp? = null,
-    val notes: String? = null
+    val addedAt: Timestamp = Timestamp.now(),
+    val notes: String = ""
 )
