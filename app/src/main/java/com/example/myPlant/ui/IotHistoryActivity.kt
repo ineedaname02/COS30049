@@ -29,12 +29,10 @@ class IotHistoryActivity : AppCompatActivity() {
         binding = ActivityIotHistoryBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Initialize views
         btnAllDevices = binding.btnAllDevices
         btnDevice001 = binding.btnDevice001
         btnDevice002 = binding.btnDevice002
 
-        // Set up toolbar back button
         binding.topAppBar.setNavigationOnClickListener {
             onBackPressedDispatcher.onBackPressed()
         }
@@ -43,10 +41,8 @@ class IotHistoryActivity : AppCompatActivity() {
         binding.historyRecycler.layoutManager = LinearLayoutManager(this)
         binding.historyRecycler.adapter = adapter
 
-        // Set up device filter buttons
         setupFilterButtons()
 
-        // Load initial data
         loadHistory()
     }
 
@@ -72,12 +68,10 @@ class IotHistoryActivity : AppCompatActivity() {
     private fun setActiveFilter(filter: String) {
         currentFilter = filter
 
-        // Use system colors temporarily to avoid R reference
         val activeColor = ContextCompat.getColor(this, android.R.color.holo_blue_dark)
         val inactiveColor = ContextCompat.getColor(this, android.R.color.darker_gray)
         val whiteColor = ContextCompat.getColor(this, android.R.color.white)
 
-        // Reset all buttons
         btnAllDevices.setBackgroundColor(inactiveColor)
         btnDevice001.setBackgroundColor(inactiveColor)
         btnDevice002.setBackgroundColor(inactiveColor)

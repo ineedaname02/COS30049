@@ -32,7 +32,6 @@ class IotHistoryAdapter(private val items: List<IotReading>) :
         holder.binding.apply {
             tvDeviceId.text = "Device: ${item.deviceId}"
 
-            // Split timestamp into date and time
             val timestampParts = item.timestamp.split("T")
             val date = timestampParts.getOrNull(0) ?: "--"
             val time = timestampParts.getOrNull(1) ?: "--"
@@ -43,7 +42,6 @@ class IotHistoryAdapter(private val items: List<IotReading>) :
             tvTemperature.text = "${item.temperature}°C"
             tvHumidity.text = "${item.humidity}%"
 
-            // Handle lightDigital - convert to text representation
             val lightText = when (item.lightDigital) {
                 0L -> "Low"
                 1L -> "Medium"
