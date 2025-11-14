@@ -53,8 +53,9 @@
             android:exported="false"
             android:theme="@style/Theme.COS30049.NoActionBar" />
         <activity
-            android:name=".ui.HistoryActivity"
-            android:exported="false" />
+            android:name=".ui.IotHistoryActivity"
+            android:exported="false"
+            android:theme="@style/Theme.COS30049.NoActionBar" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

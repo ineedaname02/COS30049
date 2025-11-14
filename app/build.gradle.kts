@@ -132,6 +132,9 @@ dependencies {
 
     //Image Loading for Map
     implementation("com.github.bumptech.glide:glide:4.16.0")
+
+    //IoT Graph
+    implementation("com.github.PhilJay:MPAndroidChart:v3.1.0")
 }
 
 apply(plugin = "com.google.gms.google-services")

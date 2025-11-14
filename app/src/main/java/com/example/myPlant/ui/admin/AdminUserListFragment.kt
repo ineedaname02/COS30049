@@ -92,7 +92,16 @@ class AdminUserListFragment : Fragment() {
             .orderBy("dateJoined", Query.Direction.DESCENDING)
             .get()
             .addOnSuccessListener { snapshot ->
-                allUsers = snapshot.documents.mapNotNull { it.toObject(UserItem::class.java) }
+                allUsers = snapshot.documents.mapNotNull { document ->
+                    try {
+                        val user = document.toObject(UserItem::class.java)
+                        user?.uid = document.id // Ensure UID is set
+                        user
+                    } catch (e: Exception) {
+                        Toast.makeText(requireContext(), "Error parsing user: ${e.message}", Toast.LENGTH_SHORT).show()
+                        null
+                    }
+                }
                 adapter.submitList(allUsers)
             }
             .addOnFailureListener { e ->
