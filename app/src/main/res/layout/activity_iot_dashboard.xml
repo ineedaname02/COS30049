@@ -14,7 +14,7 @@
         app:title="IoT Dashboard"
         app:titleCentered="true"
         app:titleTextColor="@android:color/white"
-        android:elevation="5dp" />
+        app:navigationIcon="@drawable/ic_arrow_back" />
 
 
     <androidx.core.widget.NestedScrollView
@@ -40,7 +40,6 @@
                 android:textSize="16sp"
                 android:gravity="center"
                 android:layout_marginBottom="16dp" />
-
 
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnRefreshData"
@@ -92,6 +91,51 @@
 
             <com.github.mikephil.charting.charts.LineChart
                 android:id="@+id/lineChartMoisture"
+                android:layout_width="match_parent"
+                android:layout_height="300dp"
+                android:layout_marginBottom="24dp" />
+
+            <com.google.android.material.textview.MaterialTextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Rain Detection"
+                android:textColor="@color/black"
+                android:textStyle="bold"
+                android:textSize="18sp"
+                android:layout_marginBottom="8dp" />
+
+            <com.github.mikephil.charting.charts.LineChart
+                android:id="@+id/lineChartRain"
+                android:layout_width="match_parent"
+                android:layout_height="300dp"
+                android:layout_marginBottom="24dp" />
+
+            <com.google.android.material.textview.MaterialTextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Sound Levels"
+                android:textColor="@color/black"
+                android:textStyle="bold"
+                android:textSize="18sp"
+                android:layout_marginBottom="8dp" />
+
+            <com.github.mikephil.charting.charts.LineChart
+                android:id="@+id/lineChartSound"
+                android:layout_width="match_parent"
+                android:layout_height="300dp"
+                android:layout_marginBottom="24dp" />
+
+            <com.google.android.material.textview.MaterialTextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Light Levels"
+                android:textColor="@color/black"
+                android:textStyle="bold"
+                android:textSize="18sp"
+                android:layout_marginBottom="8dp" />
+
+            <com.github.mikephil.charting.charts.LineChart
+                android:id="@+id/lineChartLight"
                 android:layout_width="match_parent"
                 android:layout_height="300dp"
                 android:layout_marginBottom="24dp" />

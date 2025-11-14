@@ -12,6 +12,7 @@ data class IotReading(
     val moisture: Double = 0.0,
     val rain: Long = 0,
     val sound: Long = 0,
+    val lightDigital: Long = 0,  // Add this field
     val timestamp: String = ""
 )
 
@@ -30,12 +31,30 @@ class IotHistoryAdapter(private val items: List<IotReading>) :
         val item = items[position]
         holder.binding.apply {
             tvDeviceId.text = "Device: ${item.deviceId}"
-            tvTemperature.text = "Temperature: ${item.temperature}°C"
-            tvHumidity.text = " Humidity: ${item.humidity}%"
-            tvMoisture.text = "Moisture: ${item.moisture}%"
-            tvRain.text = " Rain: ${item.rain}"
-            tvSound.text = " Sound: ${item.sound}"
-            tvTimestamp.text = item.timestamp
+
+            // Split timestamp into date and time
+            val timestampParts = item.timestamp.split("T")
+            val date = timestampParts.getOrNull(0) ?: "--"
+            val time = timestampParts.getOrNull(1) ?: "--"
+
+            tvDate.text = date
+            tvTime.text = time
+
+            tvTemperature.text = "${item.temperature}°C"
+            tvHumidity.text = "${item.humidity}%"
+
+            // Handle lightDigital - convert to text representation
+            val lightText = when (item.lightDigital) {
+                0L -> "Low"
+                1L -> "Medium"
+                2L -> "High"
+                else -> "Unknown"
+            }
+            lightDigital.text = lightText
+
+            tvMoisture.text = "${item.moisture}%"
+            tvRain.text = item.rain.toString()
+            tvSound.text = item.sound.toString()
         }
     }
 
