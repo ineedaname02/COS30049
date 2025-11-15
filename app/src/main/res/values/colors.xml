@@ -65,4 +65,12 @@
     <color name="rejected_status">#F44336</color> <!-- Red -->
     <color name="ai_suggested_status">#9E9E9E</color> <!-- Gray -->
 
+
+
+    <color name="red_500">#F44336</color>
+    <color name="orange_500">#FF9800</color>
+    <color name="amber_500">#FFC107</color>
+    <color name="gray_500">#F5F5F5</color>
+
+
 </resources>

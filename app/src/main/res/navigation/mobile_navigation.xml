@@ -65,4 +65,10 @@
         android:name="com.example.myPlant.ui.home.HomeFragment"
         android:label="Logout" />
 
+    <fragment
+        android:id="@+id/endangeredPlantsFragment"
+        android:name="com.example.myPlant.ui.admin.EndangeredPlantsFragment"
+        android:label="Endangered Plants"
+        tools:layout="@layout/fragment_endangered_plants" />
+
 </navigation>

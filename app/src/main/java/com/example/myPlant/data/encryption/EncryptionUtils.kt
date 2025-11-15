@@ -10,9 +10,14 @@ import java.security.SecureRandom
 import javax.crypto.Cipher
 import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.SecretKeySpec
+import com.google.firebase.auth.FirebaseAuth
+
 
 class EncryptionUtils {
     companion object {
+
+        private val auth: FirebaseAuth = FirebaseAuth.getInstance()
+
         private const val TAG = "EncryptionUtils"
         private const val ALGORITHM = "AES/GCM/NoPadding"
         private const val TAG_LENGTH = 16
@@ -26,6 +31,15 @@ class EncryptionUtils {
 
         private suspend fun fetchEncryptionKeyFromCloudFunction(): String {
             try {
+
+                val currentUser = auth.currentUser
+                if (currentUser == null) {
+                    throw Exception("Please sign in first - no authenticated user")
+                }
+
+                Log.d(TAG, "🔑 User authenticated: ${currentUser.uid}")
+
+
                 val functions = Firebase.functions("asia-southeast1")
                 val result = functions
                     .getHttpsCallable("getDataKey")

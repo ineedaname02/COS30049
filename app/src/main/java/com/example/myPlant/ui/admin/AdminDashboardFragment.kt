@@ -42,6 +42,11 @@ class AdminDashboardFragment : Fragment() {
             findNavController().navigate(R.id.nav_admin_user_list)
         }
 
+        val viewEndangerButton = view.findViewById<Button>(R.id.viewEndangered)
+        viewEndangerButton.setOnClickListener {
+            findNavController().navigate(R.id.endangeredPlantsFragment)
+        }
+
         return view
     }
 }

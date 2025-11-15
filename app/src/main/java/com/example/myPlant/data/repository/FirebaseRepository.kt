@@ -16,6 +16,7 @@ import com.google.firebase.firestore.Query
 import kotlinx.coroutines.tasks.await
 import com.example.myPlant.data.encryption.EncryptionUtils
 
+
 class FirebaseRepository(private val context: Context) {
 
     private val auth = FirebaseAuth.getInstance()
@@ -1062,10 +1063,19 @@ class FirebaseRepository(private val context: Context) {
     ) {
         try {
             // 🔐 ADD THIS CHECK FIRST
+            val currentUser = auth.currentUser
+            if (currentUser == null) {
+                Log.e("EndangeredData", "❌ User not signed in")
+                return
+            }
+
+
+            // 🔐 Then check encryption access
             if (!canAccessEncryptedData()) {
                 Log.e("EndangeredData", "❌ Admin access required for encryption")
                 return
             }
+
 
             val endangeredCategories = listOf(
                 "extinct", "extinct in the wild", "critically endangered", "endangered"
@@ -1148,6 +1158,31 @@ class FirebaseRepository(private val context: Context) {
         } catch (e: Exception) {
             Log.e("EndangeredData", "❌ Failed to read encrypted data: ${e.message}", e)
             return null
+        }
+    }
+
+    suspend fun getAllEndangeredPlants(): List<EndangeredData> {
+        return try {
+            val snapshot = db.collection("EndangeredData")
+                .orderBy("addedAt")
+                .get()
+                .await()
+
+            snapshot.toObjects(EndangeredData::class.java)
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    suspend fun removeFromEndangeredList(plantId: String): Boolean {
+        return try {
+            db.collection("EndangeredData")
+                .document(plantId)
+                .delete()
+                .await()
+            true
+        } catch (e: Exception) {
+            false
         }
     }
 
