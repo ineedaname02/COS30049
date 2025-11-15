@@ -14,11 +14,17 @@ import com.google.android.material.button.MaterialButton
 import com.google.android.material.textview.MaterialTextView
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import com.google.android.material.color.MaterialColors
 
 class IotDashboardActivity : AppCompatActivity() {
 
     private lateinit var topAppBar: MaterialToolbar
-    private lateinit var tvSensorReading: MaterialTextView
+    private lateinit var tvTemperature: MaterialTextView
+    private lateinit var tvHumidity: MaterialTextView
+    private lateinit var tvMoisture: MaterialTextView
+    private lateinit var tvRain: MaterialTextView
+    private lateinit var tvSound: MaterialTextView
+    private lateinit var tvLight: MaterialTextView
     private lateinit var btnRefreshData: MaterialButton
     private lateinit var btnViewHistory: MaterialButton
 
@@ -36,7 +42,12 @@ class IotDashboardActivity : AppCompatActivity() {
         setContentView(R.layout.activity_iot_dashboard)
 
         topAppBar = findViewById(R.id.topAppBar)
-        tvSensorReading = findViewById(R.id.tvSensorReading)
+        tvTemperature = findViewById(R.id.tvTemperature)
+        tvHumidity = findViewById(R.id.tvHumidity)
+        tvMoisture = findViewById(R.id.tvMoisture)
+        tvRain = findViewById(R.id.tvRain)
+        tvSound = findViewById(R.id.tvSound)
+        tvLight = findViewById(R.id.tvLight)
         btnRefreshData = findViewById(R.id.btnRefreshData)
         btnViewHistory = findViewById(R.id.btnViewHistory)
         lineChartTemp = findViewById(R.id.lineChartTemp)
@@ -68,13 +79,21 @@ class IotDashboardActivity : AppCompatActivity() {
     }
 
     private fun setupChart(chart: LineChart, label: String) {
+        val themeTextColor = MaterialColors.getColor(chart, com.google.android.material.R.attr.colorOnSurface)
         chart.apply {
             description.isEnabled = false
             setTouchEnabled(true)
             setPinchZoom(true)
-            xAxis.position = XAxis.XAxisPosition.BOTTOM
+            xAxis.apply {
+                position = XAxis.XAxisPosition.BOTTOM
+                textColor = themeTextColor
+            }
+            axisLeft.textColor = themeTextColor
             axisRight.isEnabled = false
-            legend.isEnabled = true
+            legend.apply {
+                isEnabled = true
+                textColor = themeTextColor
+            }
             animateX(1000)
         }
     }
@@ -116,12 +135,12 @@ class IotDashboardActivity : AppCompatActivity() {
 
                 if (readings.isNotEmpty()) {
                     val latest = readings.last()
-                    tvSensorReading.text = "Temperature: ${latest.getDouble("temperature")?.toInt() ?: 0}°C | " +
-                            "Humidity: ${latest.getDouble("humidity")?.toInt() ?: 0}% | " +
-                            "Moisture: ${latest.getDouble("moisture")?.toInt() ?: 0}% | " +
-                            "Rain: ${latest.getLong("rain") ?: 0} | " +
-                            "Sound: ${latest.getLong("sound") ?: 0} | " +
-                            "Light: ${getLightText(latest.getLong("lightDigital") ?: 0)}"
+                    tvTemperature.text = "Temp: ${latest.getDouble("temperature")?.toInt() ?: 0}°C"
+                    tvHumidity.text = "Humidity: ${latest.getDouble("humidity")?.toInt() ?: 0}%"
+                    tvMoisture.text = "Moisture: ${latest.getDouble("moisture")?.toInt() ?: 0}%"
+                    tvRain.text = "Rain: ${latest.getLong("rain") ?: 0}"
+                    tvSound.text = "Sound: ${latest.getLong("sound") ?: 0}"
+                    tvLight.text = "Light: ${getLightText(latest.getLong("lightDigital") ?: 0)}"
                 }
             }
             .addOnFailureListener { exception ->
@@ -145,12 +164,12 @@ class IotDashboardActivity : AppCompatActivity() {
         setChartData(lineChartSound, soundValues, "Sound Levels", R.color.surface_dark)
         setChartData(lineChartLight, lightValues, "Light Levels", R.color.warning_orange)
 
-        tvSensorReading.text = "Temperature: ${tempValues.last().toInt()}°C | " +
-                "Humidity: ${humidityValues.last().toInt()}% | " +
-                "Moisture: ${moistureValues.last().toInt()}% | " +
-                "Rain: ${rainValues.last().toInt()} | " +
-                "Sound: ${soundValues.last().toInt()} | " +
-                "Light: ${getLightText(lightValues.last().toLong())}"
+        tvTemperature.text = "Temp: ${tempValues.last().toInt()}°C"
+        tvHumidity.text = "Humidity: ${humidityValues.last().toInt()}%"
+        tvMoisture.text = "Moisture: ${moistureValues.last().toInt()}%"
+        tvRain.text = "Rain: ${rainValues.last().toInt()}"
+        tvSound.text = "Sound: ${soundValues.last().toInt()}"
+        tvLight.text = "Light: ${getLightText(lightValues.last().toLong())}"
     }
 
     private fun getLightText(lightValue: Long): String {
@@ -163,10 +182,11 @@ class IotDashboardActivity : AppCompatActivity() {
     }
 
     private fun setChartData(chart: LineChart, values: List<Float>, label: String, colorRes: Int) {
+        val themeTextColor = MaterialColors.getColor(chart, com.google.android.material.R.attr.colorOnSurface)
         val entries = values.mapIndexed { index, value -> Entry(index.toFloat(), value) }
         val dataSet = LineDataSet(entries, label).apply {
             color = getColor(colorRes)
-            valueTextColor = getColor(R.color.black)
+            valueTextColor = themeTextColor
             lineWidth = 2f
             circleRadius = 4f
             setCircleColor(getColor(colorRes))

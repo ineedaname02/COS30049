@@ -25,4 +25,11 @@
         <item>public</item>
     </string-array>
 
+    <string name="observation_image">Observation image</string>
+    <string name="correct">Correct</string>
+    <string name="wrong">Wrong</string>
+    <string name="corrected_scientific_name">Corrected scientific name</string>
+    <string name="corrected_common_name">Corrected common name (optional)</string>
+    <string name="submit_correction">Submit Correction</string>
+    <string name="next_pending">Next Pending</string>
 </resources>

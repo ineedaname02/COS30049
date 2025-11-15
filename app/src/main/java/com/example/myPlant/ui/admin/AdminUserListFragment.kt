@@ -1,41 +1,41 @@
 package com.example.myPlant.ui.admin
 
 import android.os.Bundle
-import android.view.*
-import android.widget.*
+import android.text.Editable
+import android.text.TextWatcher
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+import android.widget.ArrayAdapter
+import android.widget.AutoCompleteTextView
+import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
 import androidx.fragment.app.Fragment
 import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
 import com.example.myPlant.R
+import com.example.myPlant.data.model.UserItem
+import com.example.myPlant.databinding.FragmentAdminUserListBinding
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
-import com.example.myPlant.data.model.UserItem
-import android.widget.SearchView
 
 class AdminUserListFragment : Fragment() {
 
-    private lateinit var recyclerView: RecyclerView
-    private lateinit var adapter: UserListAdapter
-    private lateinit var searchView: SearchView
-    private lateinit var spinnerRole: Spinner
+    private var _binding: FragmentAdminUserListBinding? = null
+    private val binding get() = _binding!!
 
+    private lateinit var adapter: UserListAdapter
     private val firestore = FirebaseFirestore.getInstance()
     private var allUsers: List<UserItem> = emptyList()
 
     override fun onCreateView(
-        inflater: LayoutInflater, container: ViewGroup?,
-        savedInstanceState: Bundle?
+        inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
     ): View {
-        val view = inflater.inflate(R.layout.fragment_admin_user_list, container, false)
+        _binding = FragmentAdminUserListBinding.inflate(inflater, container, false)
+        val view = binding.root
 
-        recyclerView = view.findViewById(R.id.recyclerViewUsers)
-        recyclerView.layoutManager = LinearLayoutManager(requireContext())
-        adapter = UserListAdapter()
-        recyclerView.adapter = adapter
 
-        searchView = view.findViewById(R.id.searchView)
-        spinnerRole = view.findViewById(R.id.spinnerRoleFilter)
 
+        setupRecyclerView()
         setupSpinner()
         setupSearch()
         fetchUsers()
@@ -43,44 +43,41 @@ class AdminUserListFragment : Fragment() {
         return view
     }
 
+    private fun setupRecyclerView() {
+        adapter = UserListAdapter()
+        binding.recyclerViewUsers.layoutManager = LinearLayoutManager(requireContext())
+        binding.recyclerViewUsers.adapter = adapter
+    }
+
     private fun setupSpinner() {
         val roles = listOf("All", "admin", "public")
-        val adapterSpinner = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, roles)
-        adapterSpinner.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        spinnerRole.adapter = adapterSpinner
+        val adapterSpinner = ArrayAdapter(requireContext(), android.R.layout.simple_dropdown_item_1line, roles)
+        (binding.spinnerRoleFilter as? AutoCompleteTextView)?.setAdapter(adapterSpinner)
 
-        spinnerRole.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(
-                parent: AdapterView<*>, view: View?, position: Int, id: Long
-            ) {
-                applyFilters()
-            }
-
-            override fun onNothingSelected(parent: AdapterView<*>) {}
+        (binding.spinnerRoleFilter as? AutoCompleteTextView)?.setOnItemClickListener { parent, _, position, _ ->
+            applyFilters()
         }
     }
 
     private fun setupSearch() {
-        searchView.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
-            override fun onQueryTextSubmit(query: String?): Boolean {
+        binding.searchEditText.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
                 applyFilters()
-                return true
             }
 
-            override fun onQueryTextChange(newText: String?): Boolean {
-                applyFilters()
-                return true
-            }
+            override fun afterTextChanged(s: Editable?) {}
         })
     }
 
     private fun applyFilters() {
-        val searchQuery = searchView.query.toString().trim().lowercase()
-        val selectedRole = spinnerRole.selectedItem.toString()
+        val searchQuery = binding.searchEditText.text.toString().trim().lowercase()
+        val selectedRole = binding.spinnerRoleFilter.text.toString()
 
         val filteredList = allUsers.filter { user ->
             val matchesSearch = user.email?.lowercase()?.contains(searchQuery) ?: false
-            val matchesRole = selectedRole == "All" || user.role.equals(selectedRole, ignoreCase = true)
+            val matchesRole = selectedRole == "All" || user.role.equals(selectedRole, ignoreCase = true) || selectedRole.isEmpty()
             matchesSearch && matchesRole
         }
 
@@ -103,9 +100,18 @@ class AdminUserListFragment : Fragment() {
                     }
                 }
                 adapter.submitList(allUsers)
+                // Set default selection for the spinner
+                if (binding.spinnerRoleFilter.text.isEmpty()) {
+                    (binding.spinnerRoleFilter as? AutoCompleteTextView)?.setText("All", false)
+                }
             }
             .addOnFailureListener { e ->
                 Toast.makeText(requireContext(), "Error: ${e.message}", Toast.LENGTH_SHORT).show()
             }
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding = null
     }
 }

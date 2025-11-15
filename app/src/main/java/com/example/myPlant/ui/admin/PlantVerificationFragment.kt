@@ -4,13 +4,14 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.*
+import android.widget.Toast
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.Observer
 import com.bumptech.glide.Glide
 import com.example.myPlant.R
 import com.example.myPlant.data.model.PlantObservation
+import com.example.myPlant.databinding.FragmentPlantVerificationBinding
 import com.google.firebase.auth.FirebaseAuth
 
 class PlantVerificationFragment : Fragment() {
@@ -18,19 +19,9 @@ class PlantVerificationFragment : Fragment() {
     // --- ViewModel ---
     private val adminViewModel: AdminViewModel by viewModels()
 
-    // --- UI elements ---
-    private lateinit var imgObservation: ImageView
-    private lateinit var tvAiName: TextView
-    private lateinit var tvConfidence: TextView
-    private lateinit var tvIucn: TextView
-    private lateinit var btnWrong: Button
-    private lateinit var btnCorrect: Button
-    private lateinit var btnNext: Button
-    private lateinit var correctionForm: LinearLayout
-    private lateinit var etCorrectedScientific: EditText
-    private lateinit var etCorrectedCommon: EditText
-    private lateinit var btnSubmitCorrection: Button
-    private lateinit var progress: ProgressBar
+    // --- View Binding ---
+    private var _binding: FragmentPlantVerificationBinding? = null
+    private val binding get() = _binding!!
 
     // --- Data holders ---
     private var pendingList: MutableList<PlantObservation> = mutableListOf()
@@ -41,34 +32,22 @@ class PlantVerificationFragment : Fragment() {
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
-    ): View? {
-        val root = inflater.inflate(R.layout.fragment_plant_verification, container, false)
-        setupUi(root)
+    ): View {
+        _binding = FragmentPlantVerificationBinding.inflate(inflater, container, false)
+        return binding.root
+    }
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
         setupObservers()
         setupListeners()
         adminViewModel.fetchPendingObservations(limit = 30)
-        return root
-    }
-
-    private fun setupUi(root: View) {
-        imgObservation = root.findViewById(R.id.imgObservation)
-        tvAiName = root.findViewById(R.id.tvAiName)
-        tvConfidence = root.findViewById(R.id.tvConfidence)
-        tvIucn = root.findViewById(R.id.tvIucn)
-        btnWrong = root.findViewById(R.id.btnWrong)
-        btnCorrect = root.findViewById(R.id.btnCorrect)
-        btnNext = root.findViewById(R.id.btnNext)
-        correctionForm = root.findViewById(R.id.correctionForm)
-        etCorrectedScientific = root.findViewById(R.id.etCorrectedScientific)
-        etCorrectedCommon = root.findViewById(R.id.etCorrectedCommon)
-        btnSubmitCorrection = root.findViewById(R.id.btnSubmitCorrection)
-        progress = root.findViewById(R.id.progress)
     }
 
     private fun setupObservers() {
         // Observe loading state
         adminViewModel.isLoading.observe(viewLifecycleOwner, Observer { loading ->
-            progress.visibility = if (loading) View.VISIBLE else View.GONE
+            binding.progress.visibility = if (loading) View.VISIBLE else View.GONE
         })
 
         // Observe messages (Toast)
@@ -89,38 +68,36 @@ class PlantVerificationFragment : Fragment() {
     }
 
     private fun setupListeners() {
-        btnWrong.setOnClickListener { showCorrectionForm() }
-        btnCorrect.setOnClickListener { onAdminMarkCorrect() }
-        btnSubmitCorrection.setOnClickListener { onSubmitCorrection() }
-        btnNext.setOnClickListener { showNext() }
+        binding.btnWrong.setOnClickListener { showCorrectionForm() }
+        binding.btnCorrect.setOnClickListener { onAdminMarkCorrect() }
+        binding.btnSubmitCorrection.setOnClickListener { onSubmitCorrection() }
+        binding.btnNext.setOnClickListener { showNext() }
     }
 
     private fun showEmptyState() {
-        tvAiName.text = "No pending observations"
-        tvConfidence.text = ""
-        tvIucn.text = ""
-        imgObservation.setImageResource(R.drawable.ic_launcher_foreground)
-
-        correctionForm.visibility = View.GONE
+        binding.tvAiName.text = "No pending observations"
+        binding.tvConfidence.text = ""
+        binding.tvIucn.text = ""
+        binding.imgObservation.setImageResource(R.drawable.ic_launcher_foreground)
+        binding.correctionForm.visibility = View.GONE
     }
 
     private fun displayObservation(obs: PlantObservation) {
         currentObs = obs
-        tvAiName.text = "AI GIVEN NAME: ${obs.scientificName}"
-        tvConfidence.text = String.format("Confidence: %.2f", obs.confidence)
-        tvIucn.text = "IUCN: ${obs.iucnCategory ?: "-"}"
-        correctionForm.visibility = View.GONE
-        etCorrectedScientific.setText("")
-        etCorrectedCommon.setText("")
+        binding.tvAiName.text = "AI GIVEN NAME: ${obs.scientificName}"
+        binding.tvConfidence.text = String.format("Confidence: %.2f", obs.confidence)
+        binding.tvIucn.text = "IUCN: ${obs.iucnCategory ?: "-"}"
+        binding.correctionForm.visibility = View.GONE
+        binding.etCorrectedScientific.setText("")
+        binding.etCorrectedCommon.setText("")
 
         val url = obs.imageUrls.firstOrNull()
-        if (!url.isNullOrEmpty()) Glide.with(this).load(url).into(imgObservation)
-        else imgObservation.setImageResource(R.drawable.ic_launcher_foreground)
-
+        if (!url.isNullOrEmpty()) Glide.with(this).load(url).into(binding.imgObservation)
+        else binding.imgObservation.setImageResource(R.drawable.ic_launcher_foreground)
     }
 
     private fun showCorrectionForm() {
-        correctionForm.visibility = View.VISIBLE
+        binding.correctionForm.visibility = View.VISIBLE
     }
 
     private fun onAdminMarkCorrect() {
@@ -135,8 +112,8 @@ class PlantVerificationFragment : Fragment() {
 
     private fun onSubmitCorrection() {
         val obs = currentObs ?: return
-        val correctedSci = etCorrectedScientific.text.toString().trim()
-        val correctedCommon = etCorrectedCommon.text.toString().trim().ifEmpty { null }
+        val correctedSci = binding.etCorrectedScientific.text.toString().trim()
+        val correctedCommon = binding.etCorrectedCommon.text.toString().trim().ifEmpty { null }
 
         if (correctedSci.isEmpty()) {
             Toast.makeText(requireContext(), "Please enter corrected scientific name", Toast.LENGTH_SHORT).show()
@@ -173,5 +150,10 @@ class PlantVerificationFragment : Fragment() {
         }
         currentIndex = (currentIndex + 1) % pendingList.size
         displayObservation(pendingList[currentIndex])
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        _binding = null
     }
 }

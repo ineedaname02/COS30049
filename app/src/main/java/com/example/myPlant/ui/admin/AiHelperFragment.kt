@@ -10,15 +10,15 @@ import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
-import androidx.core.view.setPadding
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import com.example.myPlant.R
+import com.google.android.material.chip.Chip
+import com.google.android.material.chip.ChipGroup
 import com.google.firebase.functions.FirebaseFunctions
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
-import kotlin.text.isNotEmpty
-import kotlin.text.trim
 
 class AiHelperFragment : Fragment() {
 
@@ -26,7 +26,8 @@ class AiHelperFragment : Fragment() {
     private lateinit var inputField: EditText
     private lateinit var sendButton: Button
     private lateinit var scrollView: ScrollView
-    private lateinit var deviceButtonsLayout: LinearLayout
+    private lateinit var deviceChipGroup: ChipGroup
+    private lateinit var timeRangeChipGroup: ChipGroup
 
     private val functions = FirebaseFunctions.getInstance("asia-southeast1")
     private var currentDeviceId: String? = null
@@ -42,9 +43,10 @@ class AiHelperFragment : Fragment() {
         inputField = view.findViewById(R.id.messageInput)
         sendButton = view.findViewById(R.id.sendButton)
         scrollView = view.findViewById(R.id.chatScroll)
-        deviceButtonsLayout = view.findViewById(R.id.deviceButtonsLayout)
+        deviceChipGroup = view.findViewById(R.id.deviceChipGroup)
+        timeRangeChipGroup = view.findViewById(R.id.timeRangeChipGroup)
 
-        setupDeviceButtons()
+        setupFilterChips()
         addWelcomeMessage()
 
         sendButton.setOnClickListener {
@@ -62,36 +64,45 @@ class AiHelperFragment : Fragment() {
         return view
     }
 
-    private fun setupDeviceButtons() {
+    private fun setupFilterChips() {
         val devices = listOf("All Devices", "device001", "device002")
 
         devices.forEach { device ->
-            val button = Button(requireContext()).apply {
+            val chip = Chip(requireContext()).apply {
                 text = device
-                setOnClickListener {
-                    currentDeviceId = if (device == "All Devices") null else device
-                    addMessage("System: Now analyzing ${device}")
-                }
+                isCheckable = true
+                isChecked = device == "All Devices"
             }
-            deviceButtonsLayout.addView(button)
+            deviceChipGroup.addView(chip)
         }
 
-        // Add time range buttons
-        val timeRanges = listOf("Latest", "Today", "This Week", "This Month")
-        timeRanges.forEach { timeRange ->
-            val button = Button(requireContext()).apply {
-                text = timeRange
-                setOnClickListener {
-                    currentTimeRange = when (timeRange) {
-                        "Today" -> "today"
-                        "This Week" -> "week"
-                        "This Month" -> "month"
-                        else -> "latest"
-                    }
-                    addMessage("System: Time range set to $timeRange")
-                }
+        deviceChipGroup.setOnCheckedChangeListener { group, checkedId ->
+            val chip = group.findViewById<Chip>(checkedId)
+            if (chip != null) {
+                val device = chip.text.toString()
+                currentDeviceId = if (device == "All Devices") null else device
+                addMessage("System: Now analyzing $device")
             }
-            deviceButtonsLayout.addView(button)
+        }
+
+        val timeRanges = mapOf("Latest" to "latest", "Today" to "today", "This Week" to "week", "This Month" to "month")
+
+        timeRanges.forEach { (key, value) ->
+            val chip = Chip(requireContext()).apply {
+                text = key
+                isCheckable = true
+                isChecked = value == "latest"
+            }
+            timeRangeChipGroup.addView(chip)
+        }
+
+        timeRangeChipGroup.setOnCheckedChangeListener { group, checkedId ->
+            val chip = group.findViewById<Chip>(checkedId)
+            if (chip != null) {
+                val timeRange = chip.text.toString()
+                currentTimeRange = timeRanges[timeRange] ?: "latest"
+                addMessage("System: Time range set to $timeRange")
+            }
         }
     }
 
@@ -171,14 +182,17 @@ class AiHelperFragment : Fragment() {
         when {
             text.startsWith("AI:") -> {
                 msg.setBackgroundResource(R.drawable.ai_message_bubble)
+                msg.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.black))
                 layoutParams.gravity = Gravity.START  // left
             }
             text.startsWith("System:") -> {
                 msg.setBackgroundResource(R.drawable.system_message_bubble)
+                msg.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.black))
                 layoutParams.gravity = Gravity.START  // left
             }
             else -> {
                 msg.setBackgroundResource(R.drawable.user_message_bubble)
+                msg.setTextColor(ContextCompat.getColor(requireContext(), android.R.color.black))
                 layoutParams.gravity = Gravity.END    // right
             }
         }
