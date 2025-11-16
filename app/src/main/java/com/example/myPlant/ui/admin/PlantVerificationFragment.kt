@@ -13,6 +13,8 @@ import com.example.myPlant.R
 import com.example.myPlant.data.model.PlantObservation
 import com.example.myPlant.databinding.FragmentPlantVerificationBinding
 import com.google.firebase.auth.FirebaseAuth
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 
 class PlantVerificationFragment : Fragment() {
 
@@ -102,12 +104,19 @@ class PlantVerificationFragment : Fragment() {
 
     private fun onAdminMarkCorrect() {
         val obs = currentObs ?: return
-        adminViewModel.processAdminValidation(
-            observationId = obs.id,
-            adminId = adminId,
-            isCorrect = true
-        )
-        removeCurrentAndAdvance()
+        // ✅ FIX: Use lifecycleScope instead of viewModelScope
+        lifecycleScope.launch {
+            val success = adminViewModel.processAdminValidation(
+                observationId = obs.id,
+                adminId = adminId,
+                isCorrect = true
+            )
+            if (success) {
+                // Notify ViewModel to update its state
+                adminViewModel.onObservationProcessed(obs.id)
+                removeCurrentAndAdvance()
+            }
+        }
     }
 
     private fun onSubmitCorrection() {
@@ -120,27 +129,45 @@ class PlantVerificationFragment : Fragment() {
             return
         }
 
-        adminViewModel.processAdminValidation(
-            observationId = obs.id,
-            adminId = adminId,
-            isCorrect = false,
-            correctedScientificName = correctedSci,
-            correctedCommonName = correctedCommon
-        )
-        removeCurrentAndAdvance()
+        // ✅ FIX: Use lifecycleScope instead of viewModelScope
+        lifecycleScope.launch {
+            val success = adminViewModel.processAdminValidation(
+                observationId = obs.id,
+                adminId = adminId,
+                isCorrect = false,
+                correctedScientificName = correctedSci,
+                correctedCommonName = correctedCommon
+            )
+            if (success) {
+                // Notify ViewModel to update its state
+                adminViewModel.onObservationProcessed(obs.id)
+                removeCurrentAndAdvance()
+            }
+        }
     }
 
     private fun removeCurrentAndAdvance() {
+        val currentObsId = currentObs?.id
+
+        // Remove from local list
         if (currentIndex < pendingList.size) {
             pendingList.removeAt(currentIndex)
         }
+
+        // Update UI
         if (pendingList.isEmpty()) {
             showEmptyState()
-        } else if (currentIndex >= pendingList.size) {
-            displayObservation(pendingList.last())
+            // Optionally fetch more pending observations
+            adminViewModel.fetchPendingObservations(limit = 30)
         } else {
+            if (currentIndex >= pendingList.size) {
+                currentIndex = pendingList.size - 1
+            }
             displayObservation(pendingList[currentIndex])
         }
+
+        // Clear current observation
+        currentObs = null
     }
 
     private fun showNext() {

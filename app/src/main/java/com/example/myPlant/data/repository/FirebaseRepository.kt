@@ -737,19 +737,8 @@ class FirebaseRepository(private val context: Context) {
                 )
             }
 
-            // 6) Update the flagQueue entry to mark as resolved + attach validator info
-            db.collection("flagQueue").document(flagDocId)
-                .update(
-                    mapOf(
-                        "status" to "resolved",
-                        "validatedBy" to adminId,
-                        "validatedAt" to com.google.firebase.Timestamp.now(),
-                        "validationResult" to if (isCorrect) "correct" else "corrected"
-                    )
-                )
-                .await()
-
             db.collection("flagQueue").document(flagDocId).delete().await()
+            Log.d("AdminValidation", "✅ Deleted flagQueue entry: $flagDocId for observation: $observationId")
 
             Log.d("AdminValidation", "Admin validation completed for $observationId (user: $userId)")
             true
@@ -781,7 +770,7 @@ class FirebaseRepository(private val context: Context) {
         }
 
         val scientificName = correctedScientificName
-            ?.replace("[^A-Za-z0-9 ]".toRegex(), "_")
+            ?.replace("[^A-Za-z0-9 ]".toRegex(), "")  // ✅ Remove unwanted chars instead of replacing with _
             ?.trim()
             ?.lowercase()
             ?: observation.currentIdentification?.scientificName?.lowercase()
@@ -1187,7 +1176,11 @@ class FirebaseRepository(private val context: Context) {
     }
 
     private fun sanitizePlantName(name: String): String {
-        return name.trim().lowercase().replace("[^a-z0-9]".toRegex(), "_")
+        return name
+            .replace("[^A-Za-z0-9 ]".toRegex(), "") // ✅ Remove unwanted chars instead of replacing with _
+            .replace("\\s+".toRegex(), " ") // ✅ Normalize spaces
+            .trim()
+            .lowercase()
     }
 
 }
