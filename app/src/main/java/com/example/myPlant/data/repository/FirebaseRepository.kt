@@ -848,7 +848,7 @@ class FirebaseRepository(private val context: Context) {
                 ?: "unknown"
 
             val sanitizedScientific = scientificName
-                .replace("[^A-Za-z0-9 ]".toRegex(), "_")
+                .replace("[^A-Za-z0-9 ]".toRegex(), "")
                 .trim()
                 .lowercase()
 
