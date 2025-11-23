@@ -1117,15 +1117,18 @@ class FirebaseRepository(private val context: Context) {
     // ✅ KEEP THIS ONE - Helper function that does the actual encryption + save
     private suspend fun saveEndangeredDataToFirestore(endangeredData: EndangeredData) {
         try {
-            Log.d("EncryptionDebug", "🔐 Starting encryption for: ${endangeredData.scientificName}")
+            Log.d("EncryptionDebug", "🔐 Starting encryption for: '${endangeredData.scientificName}'")
+            Log.d("EncryptionDebug", "📝 Original data - ScientificName: '${endangeredData.scientificName}'")
+            Log.d("EncryptionDebug", "📝 Original data - PlantId: '${endangeredData.plantId}'")
+            Log.d("EncryptionDebug", "📝 Original data - CommonName: '${endangeredData.commonName}'")
 
             // 🔐 Convert to encrypted data
             val encryptedData = EncryptedEndangeredData.fromEndangeredData(endangeredData)
 
             Log.d("EncryptionDebug", "✅ Encrypted data created:")
-            Log.d("EncryptionDebug", "   Original scientificName: ${endangeredData.scientificName}")
-            Log.d("EncryptionDebug", "   Encrypted scientificName: ${encryptedData.encryptedScientificName}")
-            Log.d("EncryptionDebug", "   Is encrypted field empty? ${encryptedData.encryptedScientificName.isEmpty()}")
+            Log.d("EncryptionDebug", "   Original scientificName: '${endangeredData.scientificName}'")
+            Log.d("EncryptionDebug", "   Encrypted scientificName: '${encryptedData.encryptedScientificName}'")
+            Log.d("EncryptionDebug", "   Encrypted length: ${encryptedData.encryptedScientificName.length}")
 
             endangeredDataCollection.document(encryptedData.id)
                 .set(encryptedData, SetOptions.merge())
@@ -1150,16 +1153,82 @@ class FirebaseRepository(private val context: Context) {
         }
     }
 
+    // 🆕 ENDANGERED PLANTS FUNCTIONS WITH ENCRYPTION
     suspend fun getAllEndangeredPlants(): List<EndangeredData> {
         return try {
+            Log.d("FirebaseRepository", "🔄 Fetching all endangered plants...")
+
             val snapshot = db.collection("EndangeredData")
-                .orderBy("addedAt")
+                .orderBy("addedAt", Query.Direction.DESCENDING)
                 .get()
                 .await()
 
-            snapshot.toObjects(EndangeredData::class.java)
+            // Convert to EncryptedEndangeredData first
+            val encryptedPlants = snapshot.toObjects(EncryptedEndangeredData::class.java)
+            Log.d("FirebaseRepository", "✅ Successfully fetched ${encryptedPlants.size} encrypted plants")
+
+            // Get encryption key ONCE for all decryptions
+            val encryptionKey = try {
+                val key = EncryptionUtils.getEncryptionKey()
+                Log.d("DecryptDebug", "🔑 Encryption key retrieved: ${key.take(10)}... (length: ${key.length})")
+                key
+            } catch (e: Exception) {
+                Log.e("DecryptDebug", "❌ Failed to get encryption key: ${e.message}")
+                return emptyList()
+            }
+
+            // Decrypt each plant
+            val decryptedPlants = mutableListOf<EndangeredData>()
+            for ((index, encryptedPlant) in encryptedPlants.withIndex()) {
+                try {
+                    Log.d("DecryptDebug", "\n=== Decrypting Plant $index ===")
+
+                    // Test individual field decryption
+                    Log.d("DecryptDebug", "Encrypted scientificName: ${encryptedPlant.encryptedScientificName.take(30)}...")
+
+                    val decryptedScientificName = EncryptionUtils.decrypt(encryptedPlant.encryptedScientificName, encryptionKey)
+                    Log.d("DecryptDebug", "Decrypted scientificName: '$decryptedScientificName'")
+
+                    // Test other fields too
+                    val decryptedPlantId = EncryptionUtils.decrypt(encryptedPlant.encryptedPlantId, encryptionKey)
+                    Log.d("DecryptDebug", "Decrypted plantId: '$decryptedPlantId'")
+
+                    val decryptedImageUrl = EncryptionUtils.decrypt(encryptedPlant.encryptedImageUrl, encryptionKey)
+                    Log.d("DecryptDebug", "Decrypted imageUrl: '${decryptedImageUrl.take(30)}...'")
+
+                    // Now decrypt the whole plant
+                    val decryptedPlant = encryptedPlant.toEndangeredData()
+                    decryptedPlants.add(decryptedPlant)
+                    Log.d("FirebaseRepository", "✅ Decrypted: '${decryptedPlant.scientificName}'")
+
+                } catch (e: Exception) {
+                    Log.e("FirebaseRepository", "❌ Failed to decrypt plant $index: ${e.message}", e)
+                }
+            }
+
+            Log.d("FirebaseRepository", "✅ Successfully decrypted ${decryptedPlants.size}/${encryptedPlants.size} plants")
+            decryptedPlants
+
         } catch (e: Exception) {
+            Log.e("FirebaseRepository", "❌ Failed to fetch endangered plants: ${e.message}", e)
             emptyList()
+        }
+    }
+
+
+
+    suspend fun getEndangeredPlantById(id: String): EndangeredData? {
+        return try {
+            val document = db.collection("EndangeredData").document(id).get().await()
+            if (document.exists()) {
+                val encryptedPlant = document.toObject(EncryptedEndangeredData::class.java)
+                encryptedPlant?.toEndangeredData()
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            Log.e("FirebaseRepository", "❌ Failed to get endangered plant: ${e.message}", e)
+            null
         }
     }
 

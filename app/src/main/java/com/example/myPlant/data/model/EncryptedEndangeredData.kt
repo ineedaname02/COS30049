@@ -10,27 +10,15 @@ data class EncryptedEndangeredData(
     val id: String = "",
     val observationId: String = "",
 
-    // Encrypted fields
-    @PropertyName("encrypted_plant_id")
+    // Encrypted fields - USE CAMELCASE WITHOUT @PropertyName
     val encryptedPlantId: String = "",
-
-    @PropertyName("encrypted_scientific_name")
     val encryptedScientificName: String = "",
-
-    @PropertyName("encrypted_common_name")
     val encryptedCommonName: String = "",
-
-    @PropertyName("encrypted_image_url")
     val encryptedImageUrl: String = "",
 
-    // GeoLocation encryption - store as separate encrypted fields
-    @PropertyName("encrypted_latitude")
+    // GeoLocation encryption
     val encryptedLatitude: String = "",
-
-    @PropertyName("encrypted_longitude")
     val encryptedLongitude: String = "",
-
-    @PropertyName("encrypted_iucn_category")
     val encryptedIucnCategory: String = "",
 
     // Non-encrypted metadata
@@ -58,7 +46,7 @@ data class EncryptedEndangeredData(
                 encryptedIucnCategory = EncryptionUtils.encrypt(data.iucnCategory, encryptionKey),
                 addedBy = data.addedBy,
                 addedAt = data.addedAt ?: Timestamp.now(),
-                source = data.notes,
+                source = data.notes
             )
         }
     }

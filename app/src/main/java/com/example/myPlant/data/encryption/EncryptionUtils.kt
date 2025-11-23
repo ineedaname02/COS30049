@@ -96,15 +96,26 @@ class EncryptionUtils {
 
         fun decrypt(encryptedData: String, key: String): String {
             return try {
-                if (encryptedData.isEmpty()) return ""
+                Log.d("EncryptionUtils", "🔓 Attempting decryption...")
+                Log.d("EncryptionUtils", "   Input length: ${encryptedData.length}")
+                Log.d("EncryptionUtils", "   Key length: ${key.length}")
+
+                if (encryptedData.isEmpty()) {
+                    Log.d("EncryptionUtils", "⚠️ Empty encrypted data, returning empty string")
+                    return ""
+                }
 
                 val combined = Base64.decode(encryptedData, Base64.NO_WRAP)
+                Log.d("EncryptionUtils", "   Base64 decoded length: ${combined.size}")
+
                 if (combined.size < IV_LENGTH) {
+                    Log.e("EncryptionUtils", "❌ Invalid encrypted data: too short")
                     throw IllegalArgumentException("Invalid encrypted data")
                 }
 
                 val iv = combined.copyOfRange(0, IV_LENGTH)
                 val encrypted = combined.copyOfRange(IV_LENGTH, combined.size)
+                Log.d("EncryptionUtils", "   IV length: ${iv.size}, Encrypted length: ${encrypted.size}")
 
                 val keyBytes = key.toByteArray(Charsets.UTF_8)
                 val keySpec = SecretKeySpec(keyBytes, "AES")
@@ -114,9 +125,12 @@ class EncryptionUtils {
                 cipher.init(Cipher.DECRYPT_MODE, keySpec, gcmSpec)
                 val decrypted = cipher.doFinal(encrypted)
 
-                String(decrypted, Charsets.UTF_8)
+                val result = String(decrypted, Charsets.UTF_8)
+                Log.d("EncryptionUtils", "✅ Decryption successful: '$result'")
+                result
+
             } catch (e: Exception) {
-                Log.e(TAG, "❌ Decryption failed: ${e.message}", e)
+                Log.e("EncryptionUtils", "❌ Decryption failed: ${e.message}", e)
                 throw RuntimeException("Decryption failed: ${e.message}")
             }
         }
